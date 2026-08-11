@@ -510,6 +510,7 @@ function selectCompany(name) {
   updateCompanyButton();
   renderAll();
   startAutoRefresh();
+  if (document.getElementById('banco').classList.contains('active')) loadBankData();
 }
 let AUTO_REFRESH_TIMER = null;
 function startAutoRefresh() {
@@ -623,6 +624,7 @@ function showTab(id, btn) {
   else { const navBtn = document.querySelector(`.tab[onclick*="showTab('${id}'"]`); if (navBtn) navBtn.classList.add('active'); }
   window.scrollTo({top:0,behavior:'smooth'});
   renderAll();
+  if (id === 'banco') loadBankData();
 }
 
 let PD_CURRENT_NUM = null;
@@ -783,7 +785,7 @@ function calcTotals(empresaFiltro) {
     });
     d = gan - fee;
   }
-  const apag = empresaFiltro==='BH Pro' ? S.abonos.reduce((s,a)=>s+a.monto,0) : 0;
+  const apag = S.abonos.filter(a=>(a.empresa||'BH Pro')===empresaFiltro).reduce((s,a)=>s+a.monto,0);
   const afalta = Math.max(0, arlene - apag);
   return { tv, tg, tn, cob, pen, gan, fee, pedro, d, arlene, brandon, apag, afalta };
 }
@@ -902,7 +904,7 @@ function delC(id){S.cobros=S.cobros.filter(c=>c.id!==id);saveData();renderAll();
 function addAbono() {
   const mon = parseFloat(document.getElementById('aa-mon').value)||0;
   if (!mon) return alert('Ingresa el monto');
-  S.abonos.push({ id:gid(), fecha:document.getElementById('aa-fec').value, monto:mon, notas:document.getElementById('aa-not').value.trim() });
+  S.abonos.push({ id:gid(), fecha:document.getElementById('aa-fec').value, monto:mon, notas:document.getElementById('aa-not').value.trim(), empresa: ACTIVE_COMPANY });
   saveData(); ['aa-fec','aa-mon','aa-not'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
 function delA(id){S.abonos=S.abonos.filter(a=>a.id!==id);saveData();renderAll();}
@@ -1106,13 +1108,20 @@ function addInvoiceItemRow(item) {
   const wrap = document.getElementById('f-items');
   const row = document.createElement('div');
   row.className = 'inv-item-row';
-  row.style = 'display:grid;grid-template-columns:1.4fr 1fr .6fr .8fr auto;gap:6px;margin-bottom:6px;align-items:center;';
+  row.style = 'border:1px solid #2a4d80;border-radius:10px;padding:12px;margin-bottom:10px;background:var(--black-3);';
   row.innerHTML = `
-    <input type="text" class="ii-desc" placeholder="Descripción del ítem" value="${(item.desc||'').replace(/"/g,'&quot;')}">
-    <input type="text" class="ii-detail" placeholder="Detalle (opcional)" value="${(item.detail||'').replace(/"/g,'&quot;')}">
-    <input type="number" class="ii-qty" placeholder="Cant." value="${item.qty||1}" min="0" step="1" oninput="updateInvoiceTotalPreview()">
-    <input type="number" class="ii-rate" placeholder="Precio" value="${item.rate||0}" min="0" step="0.01" oninput="updateInvoiceTotalPreview()">
-    <button type="button" class="btn btn-outline btn-sm" onclick="this.closest('.inv-item-row').remove();updateInvoiceTotalPreview();">✕</button>`;
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:.65rem;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;">Ítem</span>
+      <button type="button" class="del" onclick="this.closest('.inv-item-row').remove();updateInvoiceTotalPreview();">✕ Quitar</button>
+    </div>
+    <div class="fl" style="font-size:.62rem;">Descripción del ítem</div>
+    <textarea class="ii-desc" placeholder="Ej. Apartment Interior Painting" rows="2" style="width:100%;font-size:1rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.desc||'')}</textarea>
+    <div class="fl" style="font-size:.62rem;">Detalle / lo que incluye (opcional)</div>
+    <textarea class="ii-detail" placeholder="Ej. Repainting of interior walls, baseboards, and doors..." rows="3" style="width:100%;font-size:.85rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.detail||'')}</textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><div class="fl" style="font-size:.62rem;">Cantidad</div><input type="number" class="ii-qty" value="${item.qty||1}" min="0" step="1" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
+      <div><div class="fl" style="font-size:.62rem;">Precio $</div><input type="number" class="ii-rate" value="${item.rate||0}" min="0" step="0.01" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
+    </div>`;
   wrap.appendChild(row);
   updateInvoiceTotalPreview();
 }
@@ -1266,11 +1275,11 @@ function openPlaidLink(link_token, receivedRedirectUri) {
     token: link_token,
     onSuccess: async (public_token, metadata) => {
       try {
-        const r = await fetch('/api/plaid/exchange-token', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_token})});
+        const r = await fetch('/api/plaid/exchange-token', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_token, empresa: ACTIVE_COMPANY})});
         const d = await r.json();
         try { localStorage.removeItem('plaid_link_token'); } catch(e) {}
         if (window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
-        if (d.success) { alert('✅ Cuenta bancaria conectada.'); loadBankData(); }
+        if (d.success) { alert('✅ Cuenta bancaria de ' + ACTIVE_COMPANY + ' conectada.'); loadBankData(); }
         else { alert('Error al guardar la conexión: ' + (d.error||'')); }
       } catch(e) { alert('Error al conectar: ' + e.message); }
     },
@@ -1298,8 +1307,10 @@ function openPlaidLink(link_token, receivedRedirectUri) {
 
 async function loadBankData() {
   try {
-    const res = await fetch('/api/plaid/transactions');
+    const res = await fetch('/api/plaid/transactions?empresa=' + encodeURIComponent(ACTIVE_COMPANY));
     const data = await res.json();
+    const warnBox = document.querySelector('#banco-content .warn-box');
+    if (warnBox) warnBox.textContent = `🏦 Conecta la cuenta bancaria de ${ACTIVE_COMPANY} para ver saldo y transacciones automáticamente.`;
     if (data.connected) {
       document.getElementById('banco-content').style.display = 'none';
       document.getElementById('banco-data').style.display = 'block';
@@ -1308,6 +1319,9 @@ async function loadBankData() {
       txDiv.innerHTML = (data.transactions||[]).slice(0,20).map(tx =>
         `<div class="tx-item"><div><div class="tx-name">${tx.name}</div><div class="tx-date">${tx.date}</div></div><div class="tx-amt ${tx.amount>0?'neg':'pos'}">${fmt(Math.abs(tx.amount))}</div></div>`
       ).join('');
+    } else {
+      document.getElementById('banco-content').style.display = 'block';
+      document.getElementById('banco-data').style.display = 'none';
     }
   } catch(e) {}
 }
@@ -1514,8 +1528,23 @@ function renderArlene() {
   document.getElementById('a-fal').textContent=fmt(t.afalta);
   const pct=t.arlene>0?Math.round(t.apag/t.arlene*100):0;
   document.getElementById('a-pct').textContent=pct+'%';
+  const pedroRow = document.getElementById('arlene-pedro-row');
+  if (ACTIVE_COMPANY === 'Kratos') {
+    if (!pedroRow) {
+      const box = document.querySelector('#arlene .abox');
+      const div = document.createElement('div');
+      div.id = 'arlene-pedro-row';
+      div.className = 'stats';
+      div.innerHTML = `<div class="sc" style="background:#100810;grid-column:1/-1;"><div class="sv" id="a-ped" style="color:#b98cff;">$0</div><div class="sl2">Pedro (su comisión, aparte)</div></div>`;
+      box.appendChild(div);
+    }
+    document.getElementById('a-ped').textContent = fmt(t.pedro);
+  } else if (pedroRow) {
+    pedroRow.remove();
+  }
   let tot=0;
-  document.getElementById('tb-a').innerHTML=S.abonos.map(a=>{tot+=a.monto;return`<tr><td>${fd(a.fecha)}</td><td style="color:var(--green)">${fmt(a.monto)}</td><td>${a.notas||''}</td><td><button class="del" onclick="delA('${a.id}')">✕</button></td></tr>`;}).join('');
+  const abonosEmpresa = S.abonos.filter(a=>(a.empresa||'BH Pro')===ACTIVE_COMPANY);
+  document.getElementById('tb-a').innerHTML=abonosEmpresa.map(a=>{tot+=a.monto;return`<tr><td>${fd(a.fecha)}</td><td style="color:var(--green)">${fmt(a.monto)}</td><td>${a.notas||''}</td><td><button class="del" onclick="delA('${a.id}')">✕</button></td></tr>`;}).join('');
   document.getElementById('a-tot').textContent=fmt(tot);
 }
 
