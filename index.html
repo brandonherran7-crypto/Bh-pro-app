@@ -142,6 +142,7 @@ select option{background:var(--black-3);}
 .warn-box{background:#1a1200;border:1px solid #3a2800;border-radius:6px;padding:12px 14px;font-size:.75rem;color:#d0b060;line-height:1.6;margin:10px 0;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 </head>
 <body>
 
@@ -1251,10 +1252,49 @@ function delInvoice(id) { if(!confirm('¿Eliminar?'))return; S.facturas=S.factur
 async function connectBank() {
   try {
     const res = await fetch('/api/plaid/create-link-token', {method:'POST'});
-    const { link_token } = await res.json();
-    alert('Bank connection requires Plaid Link UI. Feature coming soon when Production access is approved.\n\nFor Sandbox testing, the bank will show demo data.');
+    const data = await res.json();
+    if (data.error) { alert('Error de Plaid: ' + data.error); return; }
+    const link_token = data.link_token;
+    try { localStorage.setItem('plaid_link_token', link_token); } catch(e) {}
+    openPlaidLink(link_token);
   } catch(e) { alert('Error connecting to bank: ' + e.message); }
 }
+
+function openPlaidLink(link_token, receivedRedirectUri) {
+  if (typeof Plaid === 'undefined') { alert('No se pudo cargar Plaid Link. Revisa tu conexión a internet e intenta de nuevo.'); return; }
+  const config = {
+    token: link_token,
+    onSuccess: async (public_token, metadata) => {
+      try {
+        const r = await fetch('/api/plaid/exchange-token', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_token})});
+        const d = await r.json();
+        try { localStorage.removeItem('plaid_link_token'); } catch(e) {}
+        if (window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
+        if (d.success) { alert('✅ Cuenta bancaria conectada.'); loadBankData(); }
+        else { alert('Error al guardar la conexión: ' + (d.error||'')); }
+      } catch(e) { alert('Error al conectar: ' + e.message); }
+    },
+    onExit: (err, metadata) => {
+      try { localStorage.removeItem('plaid_link_token'); } catch(e) {}
+      if (window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
+      if (err) console.log('Plaid Link exit:', err);
+    }
+  };
+  if (receivedRedirectUri) config.receivedRedirectUri = receivedRedirectUri;
+  const handler = Plaid.create(config);
+  handler.open();
+}
+
+// If the page loads because the bank sent us back here (OAuth redirect), resume the Link flow.
+(function resumePlaidOAuthIfNeeded() {
+  if (window.location.href.indexOf('oauth_state_id=') === -1) return;
+  let savedToken = null;
+  try { savedToken = localStorage.getItem('plaid_link_token'); } catch(e) {}
+  if (!savedToken) return;
+  window.addEventListener('load', () => {
+    setTimeout(() => openPlaidLink(savedToken, window.location.href), 300);
+  });
+})();
 
 async function loadBankData() {
   try {
