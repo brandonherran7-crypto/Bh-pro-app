@@ -142,15 +142,65 @@ app.listen(PORT,()=>console.log(`BH Pro running on port ${PORT}`));
 // CLAUDE AI ENDPOINT
 app.post('/api/claude', auth, async (q, r) => {
   try {
-    const { system, message } = q.body;
+    const { system, message, proyectos, empresa } = q.body;
     const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_KEY) return r.json({ reply: 'API key no configurada. Agrega ANTHROPIC_API_KEY en Render.' });
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+
+    const tools = [
+      {
+        name: 'update_project_status',
+        description: 'Cambia el campo Estado (Activo, Completado, o Pendiente) de uno o varios proyectos, identificados por su número de proyecto. Úsalo cuando el usuario pida marcar proyectos como completados/activos/pendientes, incluyendo en lote (ej. "todos los proyectos de 2016 y 2017", "los que ya están pagados").',
+        input_schema: {
+          type: 'object',
+          properties: {
+            nums: { type: 'array', items: { type: 'string' }, description: 'Lista de números de proyecto a modificar, ej. ["1015","1016"]' },
+            estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'] }
+          },
+          required: ['nums', 'estado']
+        }
+      }
+    ];
+
+    const fullSystem = system + (proyectos ? `\n\nLista de proyectos actuales (num:estado:fechaInicio): ${proyectos}\n\nSi el usuario pide cambiar el estado de proyectos (uno, varios, o "todos los de tal fecha/año/condición"), identifica los números de proyecto correctos de la lista de arriba y usa la herramienta update_project_status. Si no estás seguro de cuáles proyectos aplican, pregunta antes de actuar.` : '');
+
+    const messages = [{ role: 'user', content: message }];
+    let res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system, messages: [{ role: 'user', content: message }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
     });
-    const data = await res.json();
-    r.json({ reply: data.content?.[0]?.text || 'Sin respuesta' });
+    let data = await res.json();
+
+    let dataChanged = false;
+    let changedCount = 0;
+
+    // If Claude wants to use the tool, execute it and continue the conversation
+    if (data.stop_reason === 'tool_use' && Array.isArray(data.content)) {
+      const toolUse = data.content.find(b => b.type === 'tool_use');
+      if (toolUse && toolUse.name === 'update_project_status') {
+        const { nums, estado } = toolUse.input || {};
+        let updated = [];
+        if (Array.isArray(nums) && estado) {
+          D.proyectos.forEach(p => {
+            if (nums.includes(p.num) && (!empresa || (p.empresa||'BH Pro') === empresa)) {
+              p.estado = estado;
+              updated.push(p.num);
+            }
+          });
+          if (updated.length) { saveToDisk(); dataChanged = true; changedCount = updated.length; }
+        }
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: `Se actualizaron ${updated.length} proyecto(s) a estado "${estado}": ${updated.join(', ')||'(ninguno encontrado)'}.` }] });
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+        });
+        data = await res.json();
+      }
+    }
+
+    const textBlock = Array.isArray(data.content) ? data.content.find(b => b.type === 'text') : null;
+    r.json({ reply: textBlock?.text || data.content?.[0]?.text || 'Sin respuesta', dataChanged, changedCount });
   } catch (e) { r.json({ reply: 'Error: ' + e.message }); }
 });
