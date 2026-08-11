@@ -523,6 +523,7 @@ function startAutoRefresh() {
     await loadData();
     renderAll();
     if (PD_CURRENT_NUM) renderProjectDetail();
+    if (document.getElementById('banco').classList.contains('active')) loadBankData();
   }, 20000);
 }
 function openCompanySwitcher() {
@@ -1312,6 +1313,9 @@ function openPlaidLink(link_token, receivedRedirectUri) {
   });
 })();
 
+let LAST_BANK_TXS = {};
+let LAST_BANK_NOTES = {};
+let TX_EXPANDED = {};
 async function loadBankData() {
   try {
     const res = await fetch('/api/plaid/transactions?empresa=' + encodeURIComponent(ACTIVE_COMPANY));
@@ -1321,16 +1325,132 @@ async function loadBankData() {
     if (data.connected) {
       document.getElementById('banco-content').style.display = 'none';
       document.getElementById('banco-data').style.display = 'block';
-      document.getElementById('bank-balance').textContent = fmt(data.balance);
+      document.getElementById('bank-balance').textContent = data.balance !== null ? fmt(data.balance) : '—';
       const txDiv = document.getElementById('bank-txs');
-      txDiv.innerHTML = (data.transactions||[]).slice(0,20).map(tx =>
-        `<div class="tx-item"><div><div class="tx-name">${tx.name}</div><div class="tx-date">${tx.date}</div></div><div class="tx-amt ${tx.amount>0?'neg':'pos'}">${fmt(Math.abs(tx.amount))}</div></div>`
-      ).join('');
+      LAST_BANK_NOTES = data.notes || {};
+      if (data.syncing || !data.transactions || !data.transactions.length) {
+        txDiv.innerHTML = `<div style="color:var(--gray);font-size:.75rem;padding:12px;text-align:center;">✅ Cuenta conectada. Plaid está sincronizando tus transacciones — esto puede tardar unos minutos la primera vez. Vuelve a esta pestaña en un rato.</div>`;
+      } else {
+        LAST_BANK_TXS = {};
+        const importedGastoIds = new Set(S.gastos.filter(g=>g.plaid_tx_id).map(g=>g.plaid_tx_id));
+        const importedCobroIds = new Set(S.cobros.filter(c=>c.plaid_tx_id).map(c=>c.plaid_tx_id));
+        txDiv.innerHTML = data.transactions.slice(0,60).map(tx => renderTxRow(tx, importedGastoIds, importedCobroIds)).join('');
+      }
     } else {
       document.getElementById('banco-content').style.display = 'block';
       document.getElementById('banco-data').style.display = 'none';
     }
   } catch(e) {}
+}
+
+function renderTxRow(tx, importedGastoIds, importedCobroIds) {
+  LAST_BANK_TXS[tx.transaction_id] = tx;
+  const isDeposit = tx.amount < 0; // Plaid: negative amount = money coming IN
+  const already = isDeposit ? importedCobroIds.has(tx.transaction_id) : importedGastoIds.has(tx.transaction_id);
+  const note = LAST_BANK_NOTES[tx.transaction_id] || '';
+  const actionHtml = already
+    ? `<span style="color:var(--green);font-size:.65rem;white-space:nowrap;">✓ ${isDeposit?'En Cobros':'En Gastos'}</span>`
+    : `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:4px 8px;" onclick="toggleTxCategorize('${tx.transaction_id}')">${isDeposit?'+ Cobro':'+ Gasto'}</button>`;
+  const noteIndicator = note ? ' 📝' : '';
+  return `<div class="tx-item" style="cursor:pointer;" onclick="toggleTxExpand('${tx.transaction_id}')"><div><div class="tx-name">${tx.name}${noteIndicator}</div><div class="tx-date">${tx.date}</div></div><div style="display:flex;align-items:center;gap:8px;"><div class="tx-amt ${tx.amount>0?'neg':'pos'}">${fmt(Math.abs(tx.amount))}</div><div onclick="event.stopPropagation()">${actionHtml}</div></div></div><div id="tx-expand-${tx.transaction_id}"></div><div id="tx-form-${tx.transaction_id}"></div>`;
+}
+
+function toggleTxExpand(txId) {
+  const expDiv = document.getElementById('tx-expand-' + txId);
+  if (!expDiv) return;
+  if (expDiv.innerHTML) { expDiv.innerHTML = ''; return; }
+  const tx = LAST_BANK_TXS[txId];
+  if (!tx) return;
+  const note = LAST_BANK_NOTES[txId] || '';
+  const merchant = tx.merchant_name || '';
+  const category = (tx.personal_finance_category && tx.personal_finance_category.detailed) || (tx.category ? tx.category.join(' / ') : '');
+  const channel = tx.payment_channel || '';
+  expDiv.innerHTML = `
+    <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0;font-size:.7rem;color:var(--gray);">
+      <div style="color:var(--white);font-size:.78rem;margin-bottom:6px;word-break:break-word;">${tx.name}</div>
+      ${merchant ? `<div>Comercio: ${merchant}</div>` : ''}
+      ${category ? `<div>Categoría del banco: ${category}</div>` : ''}
+      ${channel ? `<div>Canal: ${channel}</div>` : ''}
+      <div>Fecha: ${tx.date}</div>
+      <div class="fl" style="font-size:.6rem;margin-top:8px;">Tu nota / observación</div>
+      <textarea id="txnote-${txId}" rows="2" placeholder="Ej. Fue el pago de Acqualina de julio..." style="width:100%;font-size:.8rem;padding:8px;border-radius:6px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);box-sizing:border-box;">${note}</textarea>
+      <button class="btn btn-sm" style="margin-top:6px;" onclick="saveTxNote('${txId}')">Guardar nota</button>
+    </div>`;
+}
+
+async function saveTxNote(txId) {
+  const note = document.getElementById('txnote-'+txId).value.trim();
+  await fetch('/api/plaid/tx-note', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({empresa:ACTIVE_COMPANY,txId,note})});
+  LAST_BANK_NOTES[txId] = note;
+  loadBankData();
+}
+
+function toggleTxCategorize(txId) {
+  const formDiv = document.getElementById('tx-form-' + txId);
+  if (!formDiv) return;
+  if (formDiv.innerHTML) { formDiv.innerHTML = ''; return; }
+  const tx = LAST_BANK_TXS[txId];
+  if (!tx) return;
+  const isDeposit = tx.amount < 0;
+  const proys = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).slice().reverse();
+  const proyOptions = proys.map(p=>`<option value="${p.num}">${p.num} — ${p.nombre}</option>`).join('');
+  if (isDeposit) {
+    formDiv.innerHTML = `
+      <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0 10px;">
+        <div class="fl" style="font-size:.6rem;">¿De qué proyecto es este cobro?</div>
+        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">Selecciona...</option>${proyOptions}</select>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToCobro('${txId}')">✓ Guardar como Cobro Pagado</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">Cancelar</button>
+        </div>
+      </div>`;
+  } else {
+    const categorias = ['Materiales','Herramientas','Renta equipo','Transporte','Storage','Otros'];
+    const catOptions = categorias.map(c=>`<option value="${c}">${c}</option>`).join('');
+    formDiv.innerHTML = `
+      <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0 10px;">
+        <div class="fl" style="font-size:.6rem;">Categoría</div>
+        <select id="txcat-${txId}" style="width:100%;margin-bottom:8px;">${catOptions}</select>
+        <div class="fl" style="font-size:.6rem;">Proyecto</div>
+        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">Selecciona...</option>${proyOptions}</select>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToGasto('${txId}')">✓ Guardar como Gasto</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">Cancelar</button>
+        </div>
+      </div>`;
+  }
+}
+
+function confirmTxToGasto(txId) {
+  const tx = LAST_BANK_TXS[txId];
+  if (!tx) return;
+  const cat = document.getElementById('txcat-'+txId).value;
+  const proy = document.getElementById('txproy-'+txId).value;
+  if (!proy) return alert('Selecciona un proyecto');
+  S.gastos.push({ id:gid(), fecha:tx.date, proy, cat, monto:Math.abs(tx.amount), desc:tx.name, recibo:'', foto:'', plaid_tx_id:txId });
+  saveData();
+  loadBankData();
+  renderAll();
+}
+
+function confirmTxToCobro(txId) {
+  const tx = LAST_BANK_TXS[txId];
+  if (!tx) return;
+  const proy = document.getElementById('txproy-'+txId).value;
+  if (!proy) return alert('Selecciona un proyecto');
+  const monto = Math.abs(tx.amount);
+  const p = S.proyectos.find(x=>x.num===proy);
+  const existente = S.cobros.find(c=>c.num===proy && c.estado==='Pendiente');
+  if (existente) {
+    existente.estado = 'Pagado';
+    existente.fpago = tx.date;
+    existente.plaid_tx_id = txId;
+  } else {
+    S.cobros.push({ id:gid(), num:proy, cliente:(p?p.cliente:''), monto, fecha:tx.date, estado:'Pagado', tipo:'Transferencia bancaria', cheque:'', fpago:tx.date, plaid_tx_id:txId });
+  }
+  saveData();
+  loadBankData();
+  renderAll();
 }
 
 // ===== RENDER =====
