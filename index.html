@@ -1288,7 +1288,12 @@ function openPlaidLink(link_token, receivedRedirectUri) {
     onExit: (err, metadata) => {
       try { localStorage.removeItem('plaid_link_token'); } catch(e) {}
       if (window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
-      if (err) console.log('Plaid Link exit:', err);
+      if (err) {
+        console.log('Plaid Link exit with error:', err, metadata);
+        alert('La conexión no se completó: ' + (err.display_message || err.error_message || err.error_code || 'se cerró la ventana antes de terminar') + '\n\nIntenta de nuevo.');
+      } else {
+        console.log('Plaid Link exit without completing (user closed it):', metadata);
+      }
     }
   };
   if (receivedRedirectUri) config.receivedRedirectUri = receivedRedirectUri;
