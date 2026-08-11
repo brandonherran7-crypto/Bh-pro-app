@@ -508,6 +508,18 @@ function selectCompany(name) {
   document.getElementById('app').style.display = 'block';
   updateCompanyButton();
   renderAll();
+  startAutoRefresh();
+}
+let AUTO_REFRESH_TIMER = null;
+function startAutoRefresh() {
+  if (AUTO_REFRESH_TIMER) clearInterval(AUTO_REFRESH_TIMER);
+  AUTO_REFRESH_TIMER = setInterval(async () => {
+    if (document.visibilityState !== 'visible') return;
+    if (document.activeElement && ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+    await loadData();
+    renderAll();
+    if (PD_CURRENT_NUM) renderProjectDetail();
+  }, 20000);
 }
 function openCompanySwitcher() {
   document.getElementById('app').style.display = 'none';
@@ -524,6 +536,7 @@ function showCompanySelectorIfNeeded() {
     ACTIVE_COMPANY = saved;
     document.getElementById('app').style.display = 'block';
     updateCompanyButton();
+    startAutoRefresh();
     return true;
   }
   document.getElementById('app').style.display = 'none';
@@ -1471,16 +1484,22 @@ async function sendClaude() {
   msgs.innerHTML += `<div class="msg mu">${text}</div>`;
   msgs.innerHTML += `<div class="msg ml" id="lmsg">Analizando...</div>`;
   msgs.scrollTop = msgs.scrollHeight;
-  const t = calcTotals();
-  const ctx = `Eres el asistente financiero de BH Pro Services LLC, empresa de pintura y servicios en South Florida.
-Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Brandon 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.length}.
+  const t = calcTotals(ACTIVE_COMPANY);
+  const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
+Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
 Responde en español, conciso y directo.`;
+  const proyList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`${p.num}:${p.estado}:${p.inicio||'?'}`).join(', ');
   try {
-    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:text})});
+    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:text,proyectos:proyList,empresa:ACTIVE_COMPANY})});
     const d = await r.json();
     const reply = d.reply || d.content?.[0]?.text || 'No pude procesar la respuesta.';
     document.getElementById('lmsg').remove();
     msgs.innerHTML += `<div class="msg ma">${reply.replace(/\n/g,'<br>')}</div>`;
+    if (d.dataChanged) {
+      msgs.innerHTML += `<div class="msg ma" style="color:var(--green);font-weight:600;">✅ ${d.changedCount} proyecto(s) actualizados. Refrescando...</div>`;
+      await loadData();
+      renderAll();
+    }
   } catch(e) {
     document.getElementById('lmsg').remove();
     msgs.innerHTML += `<div class="msg ma">Error de conexión.</div>`;
