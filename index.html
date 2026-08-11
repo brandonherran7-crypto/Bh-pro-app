@@ -213,13 +213,15 @@ select option{background:var(--black-3);}
     <div class="sc"><div class="sv p" id="d-arl">$0</div><div class="sl2" data-i18n="lbl.arlene_45">Arlene 50%</div></div>
     <div class="sc"><div class="sv r" id="d-afl">$0</div><div class="sl2" data-i18n="lbl.falta_arlene">Falta Arlene</div></div>
   </div>
-  <div class="sl" data-i18n="lbl.arlene">Arlene</div>
-  <div class="abox">
-    <div style="font-family:'Playfair Display',serif;font-size:.85rem;color:var(--purple);margin-bottom:8px;" data-i18n="ct.cuenta_arlene">💜 Cuenta de Arlene</div>
-    <div class="stats3">
-      <div class="sc" style="background:#100810;"><div class="sv p" id="da-debe">$0</div><div class="sl2" data-i18n="lbl.le_toca">Le Toca</div></div>
-      <div class="sc" style="background:#100810;"><div class="sv g" id="da-pag">$0</div><div class="sl2" data-i18n="lbl.pagado">Pagado</div></div>
-      <div class="sc" style="background:#100810;"><div class="sv r" id="da-fal">$0</div><div class="sl2" data-i18n="lbl.falta">Falta</div></div>
+  <div id="dash-arlene-box-wrap" style="display:none;">
+    <div class="sl" data-i18n="lbl.arlene">Arlene</div>
+    <div class="abox">
+      <div style="font-family:'Playfair Display',serif;font-size:.85rem;color:var(--purple);margin-bottom:8px;" data-i18n="ct.cuenta_arlene">💜 Cuenta de Arlene</div>
+      <div class="stats3">
+        <div class="sc" style="background:#100810;"><div class="sv p" id="da-debe">$0</div><div class="sl2" data-i18n="lbl.le_toca">Le Toca</div></div>
+        <div class="sc" style="background:#100810;"><div class="sv g" id="da-pag">$0</div><div class="sl2" data-i18n="lbl.pagado">Pagado</div></div>
+        <div class="sc" style="background:#100810;"><div class="sv r" id="da-fal">$0</div><div class="sl2" data-i18n="lbl.falta">Falta</div></div>
+      </div>
     </div>
   </div>
   <div class="sl" data-i18n="lbl.proyectos">Proyectos</div>
@@ -1388,9 +1390,15 @@ function renderDash() {
   document.getElementById('d-bra').textContent=fmt(t.brandon);
   document.getElementById('d-arl').textContent=fmt(t.arlene);
   document.getElementById('d-afl').textContent=fmt(t.afalta);
-  document.getElementById('da-debe').textContent=fmt(t.arlene);
-  document.getElementById('da-pag').textContent=fmt(t.apag);
-  document.getElementById('da-fal').textContent=fmt(t.afalta);
+  const arleneBoxWrap = document.getElementById('dash-arlene-box-wrap');
+  if (ACTIVE_COMPANY === 'BH Pro') {
+    arleneBoxWrap.style.display = '';
+    document.getElementById('da-debe').textContent=fmt(t.arlene);
+    document.getElementById('da-pag').textContent=fmt(t.apag);
+    document.getElementById('da-fal').textContent=fmt(t.afalta);
+  } else {
+    arleneBoxWrap.style.display = 'none';
+  }
   const proysActivos = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY);
   const comp=proysActivos.filter(p=>p.estado==='Completado').length;
   const act=proysActivos.filter(p=>p.estado==='Activo').length;
