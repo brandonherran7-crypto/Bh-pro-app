@@ -207,7 +207,7 @@ select option{background:var(--black-3);}
     <div class="sc"><div class="sv r" id="d-gas">$0</div><div class="sl2" data-i18n="lbl.gastosn_mina">Gastos+Nómina</div></div>
     <div class="sc"><div class="sv" id="d-gan">$0</div><div class="sl2" data-i18n="lbl.ganancia_bruta">Ganancia Bruta</div></div>
   </div>
-  <div class="stats3">
+  <div class="stats3" id="split-row">
     <div class="sc"><div class="sv g" id="d-bra">$0</div><div class="sl2" data-i18n="lbl.tu_parte_55">Tu Parte 50%</div></div>
     <div class="sc"><div class="sv p" id="d-arl">$0</div><div class="sl2" data-i18n="lbl.arlene_45">Arlene 50%</div></div>
     <div class="sc"><div class="sv r" id="d-afl">$0</div><div class="sl2" data-i18n="lbl.falta_arlene">Falta Arlene</div></div>
@@ -821,6 +821,14 @@ function toggleProyectoCerrado(id){
   renderAll();
 }
 
+function changeProyectoEstado(id, estado){
+  const p = S.proyectos.find(x=>x.id===id);
+  if (!p) return;
+  p.estado = estado;
+  saveData();
+  renderAll();
+}
+
 function previewGastoFoto(input) {
   const box = document.getElementById('g-foto-preview');
   if (!input.files || !input.files[0]) { box.innerHTML=''; return; }
@@ -1302,6 +1310,27 @@ function renderDash() {
   document.getElementById('d-pen').textContent=fmt(t.pen);
   document.getElementById('d-gas').textContent=fmt(t.tg+t.tn);
   document.getElementById('d-gan').textContent=fmt(t.gan);
+  const splitRow = document.getElementById('split-row');
+  if (ACTIVE_COMPANY === 'Kratos') {
+    splitRow.style.gridTemplateColumns = 'repeat(2,1fr)';
+    splitRow.innerHTML = `
+      <div class="sc"><div class="sv" id="d-ped" style="color:#b98cff;">$0</div><div class="sl2">Pedro</div></div>
+      <div class="sc"><div class="sv g" id="d-bra">$0</div><div class="sl2">Tu Parte 50%</div></div>
+      <div class="sc"><div class="sv p" id="d-arl">$0</div><div class="sl2">Arlene 50%</div></div>
+      <div class="sc"><div class="sv r" id="d-afl">$0</div><div class="sl2">Falta Arlene</div></div>`;
+    document.getElementById('d-ped').textContent=fmt(t.pedro);
+  } else {
+    splitRow.style.gridTemplateColumns = 'repeat(3,1fr)';
+    splitRow.innerHTML = `
+      <div class="sc"><div class="sv g" id="d-bra">$0</div><div class="sl2" data-i18n="lbl.tu_parte_55">Tu Parte 50%</div></div>
+      <div class="sc"><div class="sv p" id="d-arl">$0</div><div class="sl2" data-i18n="lbl.arlene_45">Arlene 50%</div></div>
+      <div class="sc"><div class="sv r" id="d-afl">$0</div><div class="sl2" data-i18n="lbl.falta_arlene">Falta Arlene</div></div>`;
+  }
+  document.querySelectorAll('#split-row [data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const entry = I18N[key];
+    if (entry && entry[CURRENT_LANG]) el.textContent = entry[CURRENT_LANG];
+  });
   document.getElementById('d-bra').textContent=fmt(t.brandon);
   document.getElementById('d-arl').textContent=fmt(t.arlene);
   document.getElementById('d-afl').textContent=fmt(t.afalta);
@@ -1352,7 +1381,14 @@ function renderProy() {
     const detailBtn = `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:3px 6px;margin-left:4px;" onclick="openProjectDetail('${p.id}')">📋 Gastos/Nómina</button>`;
     const yaPagado = S.cobros.some(cob=>cob.num===p.num && cob.estado==='Pagado');
     const cerrado = p.estado==='Completado' || yaPagado;
-    return`<tr><td>${p.num}</td><td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</td><td>${fmt(p.valor)}</td><td style="color:var(--red)">${fmt(c.g)}</td><td style="color:var(--red)">${fmt(c.n)}</td><td style="color:${c.gan>=0?'var(--green)':'var(--red)'}">${fmt(c.gan)}</td><td><span class="badge ${ec}">${p.estado}</span></td><td style="text-align:center;"><input type="checkbox" ${cerrado?'checked':''} onchange="toggleProyectoCerrado('${p.id}')" style="width:18px;height:18px;cursor:pointer;"></td><td style="color:var(--green);text-align:center;">${hasFact}${facturarBtn}${detailBtn}</td><td><button class="del" onclick="delP('${p.id}')">✕</button></td></tr>`;
+    const estadoBg = p.estado==='Completado'?'#0a2a1a':p.estado==='Activo'?'#0a1a2a':'#2a1a00';
+    const estadoColor = p.estado==='Completado'?'var(--green)':p.estado==='Activo'?'var(--blue)':'var(--gold)';
+    const estadoSelect = `<select onchange="changeProyectoEstado('${p.id}',this.value)" style="background:${estadoBg};color:${estadoColor};border:1px solid ${estadoColor}55;border-radius:12px;font-size:.6rem;font-weight:600;text-transform:uppercase;padding:2px 6px;">
+      <option value="Activo" ${p.estado==='Activo'?'selected':''}>Activo</option>
+      <option value="Completado" ${p.estado==='Completado'?'selected':''}>Completado</option>
+      <option value="Pendiente" ${p.estado==='Pendiente'?'selected':''}>Pendiente</option>
+    </select>`;
+    return`<tr><td>${p.num}</td><td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</td><td>${fmt(p.valor)}</td><td style="color:var(--red)">${fmt(c.g)}</td><td style="color:var(--red)">${fmt(c.n)}</td><td style="color:${c.gan>=0?'var(--green)':'var(--red)'}">${fmt(c.gan)}</td><td>${estadoSelect}</td><td style="text-align:center;"><input type="checkbox" ${cerrado?'checked':''} onchange="toggleProyectoCerrado('${p.id}')" style="width:18px;height:18px;cursor:pointer;"></td><td style="color:var(--green);text-align:center;">${hasFact}${facturarBtn}${detailBtn}</td><td><button class="del" onclick="delP('${p.id}')">✕</button></td></tr>`;
   }).join('');
   document.getElementById('tf-v').textContent=fmt(tv);
   document.getElementById('tf-g').textContent=fmt(tg);
