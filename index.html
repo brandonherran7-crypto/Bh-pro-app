@@ -244,19 +244,19 @@ select option{background:var(--black-3);}
     <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div><input type="text" id="p-loc" list="loc-list" placeholder="Acqualina"><datalist id="loc-list"><option value="Acqualina"><option value="Palm Aire"></datalist></div></div>
     <div class="fg" id="p-pedro-row"><div id="p-pedro-wrap" style="display:none;"><div class="fl" data-i18n="fld.comision_pedro">% Comisión Pedro</div><input type="number" id="p-pedro" placeholder="20" min="0" max="100" step="0.1"></div><div></div></div>
     <div class="fg3"><div><div class="fl" data-i18n="fld.fecha_inicio">Fecha Inicio</div><input type="date" id="p-ini"></div><div><div class="fl" data-i18n="fld.fecha_fin">Fecha Fin</div><input type="date" id="p-fin"></div><div><div class="fl" data-i18n="fld.valor_cotizado">Valor Cotizado $</div><input type="number" id="p-val" placeholder="0"></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="p-est"><option>Activo</option><option>Completado</option><option>Pendiente</option></select></div><div><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="p-not" placeholder="Opcional"></div></div>
-    <button class="btn" onclick="addProyecto()">+ Agregar Proyecto</button>
+    <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="p-est"><option value="Activo" data-i18n="opt.activo">Activo</option><option value="Completado" data-i18n="opt.completado">Completado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div><div><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="p-not" placeholder="Opcional"></div></div>
+    <button class="btn" onclick="addProyecto()" data-i18n="btn.agregar_proyecto_submit">+ Agregar Proyecto</button>
   </div>
   <div class="card">
-    <div class="card-title">📥 Importar/Actualizar desde Excel</div>
-    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Sube tu Excel de proyectos. Columnas reconocidas: <b>num, nombre, cliente, valor, estado, notas, loc</b> (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.</p>
+    <div class="card-title" data-i18n="ct.importar_excel">📥 Importar/Actualizar desde Excel</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.excel_import_desc">Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.</p>
     <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" onchange="handleExcelImport(this)">
     <div id="excel-import-status" style="font-size:.7rem;color:var(--gold);margin-top:8px;"></div>
   </div>
   <div class="card admin-only" style="display:none;border:1px solid #ffb02033;">
-    <div class="card-title">📦 Datos de referencia (11 ago 2026)</div>
-    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.</p>
-    <button class="btn" style="background:var(--red);" onclick="forceLoadBakedData()">⚠️ Reemplazar todo con los datos horneados</button>
+    <div class="card-title" data-i18n="ct.datos_referencia">📦 Datos de referencia (11 ago 2026)</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.datos_referencia_desc">La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.</p>
+    <button class="btn" style="background:var(--red);" onclick="forceLoadBakedData()" data-i18n="btn.reemplazar_datos">⚠️ Reemplazar todo con los datos horneados</button>
   </div>
   <div class="search-bar"><span style="color:var(--gold)">🔍</span><input type="text" id="sq-p" placeholder="Buscar proyecto..." oninput="renderProy()"></div>
   <div class="sinfo" id="si-p"></div>
@@ -272,23 +272,24 @@ select option{background:var(--black-3);}
       <button class="del" onclick="closeProjectDetail()">✕</button>
     </div>
     <div id="pd-subtitle" style="font-size:.68rem;color:var(--gray);margin-bottom:12px;"></div>
-    <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
-      <div class="sc"><div class="sv r" id="pd-gastos-tot">$0</div><div class="sl2">Gastos</div></div>
-      <div class="sc"><div class="sv r" id="pd-nomina-tot">$0</div><div class="sl2">Nómina</div></div>
-      <div class="sc"><div class="sv g" id="pd-ganancia">$0</div><div class="sl2">Ganancia</div></div>
+    <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px;">
+      <div class="sc"><div class="sv r" id="pd-gastos-tot">$0</div><div class="sl2" data-i18n="ct.gastos_tot">Gastos</div></div>
+      <div class="sc"><div class="sv r" id="pd-nomina-tot">$0</div><div class="sl2" data-i18n="ct.nomina_tot">Nómina</div></div>
+      <div class="sc"><div class="sv g" id="pd-ganancia">$0</div><div class="sl2" data-i18n="ct.ganancia_pd">Ganancia</div></div>
     </div>
+    <div id="pd-split-row" class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px;"></div>
 
-    <div class="sl">+ Agregar Gasto</div>
-    <div class="fg"><div><div class="fl">Categoría</div><select id="pd-g-cat"><option>Materiales</option><option>Herramientas</option><option>Renta</option><option>Combustible</option><option>Otro</option></select></div><div><div class="fl">Monto $</div><input type="number" id="pd-g-monto" placeholder="0" min="0" step="0.01"></div></div>
-    <div style="margin-bottom:8px;"><div class="fl">Descripción</div><input type="text" id="pd-g-desc" placeholder="Pintura, cinta..."></div>
+    <div class="sl" data-i18n="sl.agregar_gasto">+ Agregar Gasto</div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="pd-g-cat"><option>Materiales</option><option>Herramientas</option><option>Renta</option><option>Combustible</option><option>Otro</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="pd-g-monto" placeholder="0" min="0" step="0.01"></div></div>
+    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="pd-g-desc" placeholder="Pintura, cinta..."></div>
     <div style="margin-bottom:8px;"><input type="file" id="pd-g-foto" accept="image/*" capture="environment"></div>
-    <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="addGastoToProject()">+ Agregar Gasto</button>
+    <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="addGastoToProject()" data-i18n="btn.agregar_gasto_pd">+ Agregar Gasto</button>
     <div id="pd-gastos-list" style="max-height:140px;overflow-y:auto;margin-bottom:16px;font-size:.7rem;"></div>
 
-    <div class="sl">+ Agregar Nómina</div>
-    <div class="fg"><div><div class="fl">Empleado</div><input type="text" id="pd-n-emp" placeholder="Nombre"></div><div><div class="fl">Horas/Días</div><input type="number" id="pd-n-horas" value="1" min="0" step="0.5" oninput="pdCalcNominaTotal()"></div></div>
-    <div class="fg"><div><div class="fl">Tarifa $</div><input type="number" id="pd-n-tarifa" placeholder="0" min="0" step="0.01" oninput="pdCalcNominaTotal()"></div><div><div class="fl">Total Pagado $</div><input type="number" id="pd-n-total" placeholder="0" min="0" step="0.01"></div></div>
-    <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="addNominaToProject()">+ Agregar Nómina</button>
+    <div class="sl" data-i18n="sl.agregar_nomina">+ Agregar Nómina</div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.empleado">Empleado</div><input type="text" id="pd-n-emp" placeholder="Nombre"></div><div><div class="fl" data-i18n="fld.horasdias">Horas/Días</div><input type="number" id="pd-n-horas" value="1" min="0" step="0.5" oninput="pdCalcNominaTotal()"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.tarifa">Tarifa $</div><input type="number" id="pd-n-tarifa" placeholder="0" min="0" step="0.01" oninput="pdCalcNominaTotal()"></div><div><div class="fl" data-i18n="fld.total_pagado">Total Pagado $</div><input type="number" id="pd-n-total" placeholder="0" min="0" step="0.01"></div></div>
+    <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="addNominaToProject()" data-i18n="btn.agregar_nomina_pd">+ Agregar Nómina</button>
     <div id="pd-nomina-list" style="max-height:140px;overflow-y:auto;font-size:.7rem;"></div>
   </div>
 </div>
@@ -306,7 +307,7 @@ select option{background:var(--black-3);}
   <p class="page-sub" data-i18n="sub.gastos">Materiales, herramientas, renta</p>
   <div class="card">
     <div class="card-title" data-i18n="ct.registrar_gasto">Registrar Gasto</div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="g-fec"></div><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="g-pro" onfocus="populateProjectSelect('g-pro')"><option value="">Selecciona...</option></select></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="g-fec"></div><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="g-pro" onfocus="populateProjectSelect('g-pro', true)"><option value="">Selecciona...</option></select></div></div>
     <div class="fg"><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="g-cat"><option>Materiales</option><option>Herramientas</option><option>Renta equipo</option><option>Transporte</option><option>Storage</option><option>Otros</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="g-mon" placeholder="0"></div></div>
     <div class="fg"><div><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="g-des" placeholder="Pintura, cinta..."></div><div><div class="fl" data-i18n="fld.recibo">Recibo</div><input type="text" id="g-rec" placeholder="Home Depot"></div></div>
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.foto_del_recibogasto_opcional">Foto del recibo/gasto (opcional)</div><input type="file" id="g-foto" accept="image/*" capture="environment" onchange="previewGastoFoto(this)"><div id="g-foto-preview" style="margin-top:6px;"></div></div>
@@ -367,9 +368,11 @@ select option{background:var(--black-3);}
   <div class="card">
     <div class="card-title" data-i18n="ct.nueva_factura">Nueva Factura</div>
     <div class="fg"><div><div class="fl" data-i18n="fld.factura"># Factura</div><input type="text" id="f-num" placeholder="1070" onchange="onInvoiceNumChange()"></div><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="f-fec"></div></div>
-    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.bill_to">Bill To</div><input type="text" id="f-bill" placeholder="Acqualina Management LLC"></div>
-    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="f-item" placeholder="WALLPAPER REMOVAL & PAINTING 903B"></div>
-    <div class="fl" style="margin-top:8px;">Ítems de la factura</div>
+    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.bill_to">Bill To</div><input type="text" id="f-bill" list="f-bill-list" placeholder="Acqualina Management LLC" onfocus="populateBillToDatalist()"></div>
+    <datalist id="f-bill-list"></datalist>
+    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="f-item" list="f-item-list" placeholder="WALLPAPER REMOVAL & PAINTING 903B" onfocus="populateItemDatalist()"></div>
+    <datalist id="f-item-list"></datalist>
+    <div class="fl" style="margin-top:8px;" data-i18n="fld.items_factura">Ítems de la factura</div>
     <div id="f-items"></div>
     <button class="btn btn-outline btn-sm" onclick="addInvoiceItemRow()" style="margin:6px 0 10px;" data-i18n="btn.agregar_item">+ Agregar Ítem</button>
     <div style="text-align:right;font-size:.85rem;color:var(--gold);margin-bottom:10px;">Total: $<span id="f-total-preview">0.00</span></div>
@@ -417,6 +420,7 @@ select option{background:var(--black-3);}
       <button class="btn btn-sm" id="arlene-access-btn" onclick="toggleArleneAccess()" data-i18n="btn.cargando">Cargando...</button>
     </div>
     <p style="font-size:.65rem;color:var(--gray);margin-top:6px;">Cuando está desactivado, la contraseña de Arlene deja de funcionar hasta que la vuelvas a activar.</p>
+    <div id="arlene-last-login-box" style="margin-top:10px;padding-top:10px;border-top:1px solid #2a4d80;font-size:.72rem;color:var(--gray);">🔔 Último acceso: <span id="arlene-last-login-text">cargando...</span></div>
   </div>
   <div class="abox">
     <div style="font-family:'Playfair Display',serif;font-size:.88rem;color:var(--purple);margin-bottom:10px;">💜 Resumen</div>
@@ -474,7 +478,7 @@ select option{background:var(--black-3);}
 <div class="claude-wrap">
   <div class="cpanel" id="cpanel">
     <div class="cheader"><div class="chtitle">✦ Claude — Asistente Financiero</div><button class="cclose" onclick="toggleClaude()">✕</button></div>
-    <div class="cmsgs" id="cmsgs"><div class="msg ma">Hola Brandon! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?</div></div>
+    <div class="cmsgs" id="cmsgs"><div class="msg ma" data-i18n="chat.greeting">Hola Brandon! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?</div></div>
     <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="sendClaude()">➤</button></div>
   </div>
   <button class="cbtn" onclick="toggleClaude()">🤖</button>
@@ -510,6 +514,10 @@ function selectCompany(name) {
   document.getElementById('company-select-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   updateCompanyButton();
+  const fNum = document.getElementById('f-num');
+  if (fNum) fNum.value = '';
+  const fBill = document.getElementById('f-bill');
+  if (fBill) fBill.value = '';
   renderAll();
   startAutoRefresh();
   if (document.getElementById('banco').classList.contains('active')) loadBankData();
@@ -596,6 +604,29 @@ async function toggleArleneAccess() {
   } catch(e) { alert('Error al actualizar acceso'); }
 }
 
+let ARLENE_LOGIN_NOTIFIED = false;
+async function loadArleneLastLogin() {
+  try {
+    const res = await fetch('/api/arlene-last-login');
+    const data = await res.json();
+    const el = document.getElementById('arlene-last-login-text');
+    if (!el) return;
+    if (!data.lastLogin) { el.textContent = tt('nunca ha entrado todavía','has never logged in yet'); return; }
+    const d = new Date(data.lastLogin);
+    const isEn = CURRENT_LANG === 'en';
+    el.textContent = d.toLocaleString(isEn ? 'en-US' : 'es-US', {dateStyle:'medium', timeStyle:'short'});
+    // Highlight if Arlene logged in within the last 30 minutes (fresh session)
+    const minutesAgo = (Date.now() - d.getTime()) / 60000;
+    const box = document.getElementById('arlene-last-login-box');
+    if (minutesAgo >= 0 && minutesAgo < 30) {
+      box.style.background = '#1a3a1a';
+      box.style.borderRadius = '6px';
+      box.style.padding = '8px';
+      el.parentElement.innerHTML = `🟢 Arlene está activa ahora mismo (entró hace ${Math.round(minutesAgo)} min)`;
+    }
+  } catch(e) {}
+}
+
 function doLogout() {
   fetch('/api/logout',{method:'POST'}).then(() => { location.reload(); });
 }
@@ -642,6 +673,12 @@ function openProjectDetail(id) {
   document.getElementById('pd-modal').style.display = 'block';
 }
 
+function openProjectDetailByNum(num) {
+  const p = S.proyectos.find(x=>x.num===num && (x.empresa||'BH Pro')===ACTIVE_COMPANY);
+  if (!p) { alert('No encontré el proyecto #' + num + ' en ' + ACTIVE_COMPANY); return; }
+  openProjectDetail(p.id);
+}
+
 function closeProjectDetail() {
   document.getElementById('pd-modal').style.display = 'none';
   PD_CURRENT_NUM = null;
@@ -659,16 +696,33 @@ function renderProjectDetail() {
   document.getElementById('pd-gastos-tot').textContent = fmt(totG);
   document.getElementById('pd-nomina-tot').textContent = fmt(totN);
   document.getElementById('pd-ganancia').textContent = fmt(p.valor - totG - totN);
+  const c = calcP(p);
+  const splitRow = document.getElementById('pd-split-row');
+  if ((p.empresa||'BH Pro') === 'Kratos') {
+    splitRow.style.gridTemplateColumns = 'repeat(3,1fr)';
+    splitRow.innerHTML = `
+      <div class="sc" style="background:#100810;"><div class="sv" id="pd-pedro" style="color:#b98cff;">$0</div><div class="sl2">Pedro</div></div>
+      <div class="sc" style="background:#100810;"><div class="sv g" id="pd-brandon">$0</div><div class="sl2">Tu Parte</div></div>
+      <div class="sc" style="background:#100810;"><div class="sv p" id="pd-arlene">$0</div><div class="sl2">Arlene</div></div>`;
+    document.getElementById('pd-pedro').textContent = fmt(c.pedro);
+  } else {
+    splitRow.style.gridTemplateColumns = 'repeat(2,1fr)';
+    splitRow.innerHTML = `
+      <div class="sc" style="background:#100810;"><div class="sv g" id="pd-brandon">$0</div><div class="sl2">Tu Parte</div></div>
+      <div class="sc" style="background:#100810;"><div class="sv p" id="pd-arlene">$0</div><div class="sl2">Arlene</div></div>`;
+  }
+  document.getElementById('pd-brandon').textContent = fmt(c.brandon);
+  document.getElementById('pd-arlene').textContent = fmt(c.arlene);
   document.getElementById('pd-gastos-list').innerHTML = gastos.length ? gastos.map(g=>
     `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
       <span>${g.cat} — ${g.desc||''} ${g.foto?'📷':''}</span>
       <span style="color:var(--red);">${fmt(g.monto)} <button class="del" onclick="delGastoFromProject('${g.id}')">✕</button></span>
-    </div>`).join('') : '<span style="color:var(--gray);">Sin gastos aún.</span>';
+    </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin gastos aún.','No expenses yet.')}</span>`;
   document.getElementById('pd-nomina-list').innerHTML = nomina.length ? nomina.map(n=>
     `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
       <span>${n.empleado} — ${n.horas}h</span>
       <span style="color:var(--green);">${fmt(n.total)} <button class="del" onclick="delNominaFromProject('${n.id}')">✕</button></span>
-    </div>`).join('') : '<span style="color:var(--gray);">Sin pagos aún.</span>';
+    </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin pagos aún.','No payments yet.')}</span>`;
 }
 
 function pdCalcNominaTotal() {
@@ -766,11 +820,13 @@ function calcTotals(empresaFiltro) {
   const proysClosed = proys.filter(p => p.estado === 'Completado' || paidNums.has(p.num));
   const closedNums = new Set(proysClosed.map(p=>p.num));
   const tv = proysClosed.reduce((s,p)=>s+p.valor,0);
-  const tg = S.gastos.filter(g=>closedNums.has(g.proy)).reduce((s,g)=>s+g.monto,0);
+  const tgProy = S.gastos.filter(g=>closedNums.has(g.proy)).reduce((s,g)=>s+g.monto,0);
+  const tgGeneral = S.gastos.filter(g=>!g.proy && g.empresa===empresaFiltro).reduce((s,g)=>s+g.monto,0);
+  const tg = tgProy + tgGeneral;
   const tn = S.nomina.filter(n=>closedNums.has(n.proy)).reduce((s,n)=>s+n.total,0);
   // Collections tracking reflects ALL invoiced projects regardless of closed status — money in/out is real either way.
-  const cob = S.cobros.filter(c=>proyNums.has(c.num) && c.estado==='Pagado').reduce((s,c)=>s+c.monto,0);
-  const pen = S.cobros.filter(c=>proyNums.has(c.num) && c.estado==='Pendiente').reduce((s,c)=>s+c.monto,0);
+  const cob = S.cobros.filter(c=>(c.empresa?c.empresa===empresaFiltro:proyNums.has(c.num)) && c.estado==='Pagado').reduce((s,c)=>s+c.monto,0);
+  const pen = S.cobros.filter(c=>(c.empresa?c.empresa===empresaFiltro:proyNums.has(c.num)) && c.estado==='Pendiente').reduce((s,c)=>s+c.monto,0);
   const gan = tv - tg - tn;
   let fee=0, pedro=0, arlene=0, brandon=0, d;
   if (empresaFiltro === 'Kratos') {
@@ -793,12 +849,13 @@ function calcTotals(empresaFiltro) {
   return { tv, tg, tn, cob, pen, gan, fee, pedro, d, arlene, brandon, apag, afalta };
 }
 
-function populateProjectSelect(selectId) {
+function populateProjectSelect(selectId, allowGeneral) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
   const current = sel.value;
   const sorted = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).sort((a,b)=> a.num.localeCompare(b.num, undefined, {numeric:true}));
-  sel.innerHTML = '<option value="">Selecciona...</option>' + sorted.map(p=>{
+  const generalOption = allowGeneral ? '<option value="GENERAL">— Gasto General (sin proyecto) —</option>' : '';
+  sel.innerHTML = '<option value="">Selecciona...</option>' + generalOption + sorted.map(p=>{
     return `<option value="${p.num}">${p.num} — ${p.nombre}</option>`;
   }).join('');
   if (current) sel.value = current;
@@ -872,7 +929,9 @@ async function addGasto() {
   if (fotoInput && fotoInput.files && fotoInput.files[0]) {
     try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) { console.log('Foto error:', e); }
   }
-  S.gastos.push({ id:gid(), fecha:document.getElementById('g-fec').value, proy:document.getElementById('g-pro').value.trim(), cat:document.getElementById('g-cat').value, monto:mon, desc:document.getElementById('g-des').value.trim(), recibo:document.getElementById('g-rec').value.trim(), foto });
+  let proyVal = document.getElementById('g-pro').value.trim();
+  if (proyVal === 'GENERAL') proyVal = '';
+  S.gastos.push({ id:gid(), fecha:document.getElementById('g-fec').value, proy:proyVal, cat:document.getElementById('g-cat').value, monto:mon, desc:document.getElementById('g-des').value.trim(), recibo:document.getElementById('g-rec').value.trim(), foto, empresa: ACTIVE_COMPANY });
   saveData(); ['g-fec','g-pro','g-mon','g-des','g-rec'].forEach(id=>document.getElementById(id).value='');
   if (fotoInput) fotoInput.value='';
   document.getElementById('g-foto-preview').innerHTML='';
@@ -898,7 +957,7 @@ function addCobro() {
   const num = document.getElementById('c-num').value.trim();
   const mon = parseFloat(document.getElementById('c-mon').value)||0;
   if (!num||!mon) return alert('Ingresa # y monto');
-  S.cobros.push({ id:gid(), num, cliente:document.getElementById('c-cli').value.trim(), monto:mon, fecha:document.getElementById('c-fec').value, estado:document.getElementById('c-est').value, tipo:document.getElementById('c-tip').value, cheque:document.getElementById('c-che').value.trim(), fpago:document.getElementById('c-fpg').value });
+  S.cobros.push({ id:gid(), num, cliente:document.getElementById('c-cli').value.trim(), monto:mon, fecha:document.getElementById('c-fec').value, estado:document.getElementById('c-est').value, tipo:document.getElementById('c-tip').value, cheque:document.getElementById('c-che').value.trim(), fpago:document.getElementById('c-fpg').value, empresa: ACTIVE_COMPANY });
   saveData(); ['c-num','c-mon','c-fec','c-che','c-fpg'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
 function toggleCobro(id){const c=S.cobros.find(c=>c.id===id);if(c){c.estado=c.estado==='Pagado'?'Pendiente':'Pagado';saveData();renderAll();}}
@@ -919,8 +978,12 @@ function openEmailModal(invId) {
   currentEmailInvId = invId;
   const inv = S.facturas.find(f=>f.id===invId);
   if(!inv) return;
-  document.getElementById('em-sub').value = `Invoice #${inv.number} - BH Pro Services LLC`;
-  document.getElementById('em-msg').value = `Dear Acqualina Management Team,\n\nPlease find attached Invoice #${inv.number} for ${inv.item||inv.projectName||'services rendered'} in the amount of $${parseFloat(inv.amount).toFixed(2)}.\n\nPlease don't hesitate to contact us with any questions.\n\nBest regards,\nBrandon Herran\nBH Pro Services LLC\ninfo@bhproservices.com`;
+  const isKratos = (inv.empresa||'BH Pro') === 'Kratos';
+  const companyName = isKratos ? 'Kratos Elite Coatings LLC' : 'BH Pro Services LLC';
+  const companyEmail = isKratos ? 'KratosEliteCoatings@gmail.com' : 'info@bhproservices.com';
+  const greeting = isKratos ? 'Dear Client,' : 'Dear Acqualina Management Team,';
+  document.getElementById('em-sub').value = `Invoice #${inv.number} - ${companyName}`;
+  document.getElementById('em-msg').value = `${greeting}\n\nPlease find attached Invoice #${inv.number} for ${inv.item||inv.projectName||'services rendered'} in the amount of $${parseFloat(inv.amount).toFixed(2)}.\n\nPlease don't hesitate to contact us with any questions.\n\nBest regards,\nBrandon Herran\n${companyName}\n${companyEmail}`;
   document.getElementById('em-status').textContent = '';
   document.getElementById('email-modal').style.display = 'flex';
 }
@@ -1076,14 +1139,34 @@ function getNextInvoiceNumber(empresa) {
 
 function prefillNextInvoiceNumber() {
   const f = document.getElementById('f-num');
-  if (f) f.value = getNextInvoiceNumber(ACTIVE_COMPANY);
+  if (f && !f.value) f.value = getNextInvoiceNumber(ACTIVE_COMPANY);
   const billField = document.getElementById('f-bill');
   if (billField && ACTIVE_COMPANY === 'BH Pro' && !billField.value) billField.value = 'Acqualina Management LLC';
 }
 
+function populateBillToDatalist() {
+  const dl = document.getElementById('f-bill-list');
+  if (!dl) return;
+  const facturasEmpresa = S.facturas.filter(f => (f.empresa||'BH Pro') === ACTIVE_COMPANY);
+  const nombres = [...new Set(facturasEmpresa.map(f => (f.billTo||'').trim()).filter(Boolean))];
+  nombres.sort((a,b) => a.localeCompare(b));
+  dl.innerHTML = nombres.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+
+function populateItemDatalist() {
+  const dl = document.getElementById('f-item-list');
+  if (!dl) return;
+  const facturasEmpresa = S.facturas.filter(f => (f.empresa||'BH Pro') === ACTIVE_COMPANY);
+  const nombres = [...new Set(facturasEmpresa.map(f => (f.item||f.projectName||'').trim()).filter(Boolean))];
+  nombres.sort((a,b) => a.localeCompare(b));
+  dl.innerHTML = nombres.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+
 // ===== I18N =====
-const I18N = {"tab.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "tab.proyectos": {"es": "Proyectos", "en": "Projects"}, "tab.locaciones": {"es": "Locaciones", "en": "Locations"}, "tab.gastos": {"es": "Gastos", "en": "Expenses"}, "tab.nomina": {"es": "Nómina", "en": "Payroll"}, "tab.cobros": {"es": "Cobros", "en": "Collections"}, "tab.facturas": {"es": "Facturas", "en": "Invoices"}, "tab.banco": {"es": "Banco", "en": "Bank"}, "tab.arlene": {"es": "Arlene", "en": "Arlene"}, "tab.mensual": {"es": "Mensual", "en": "Monthly"}, "title.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "title.proyectos": {"es": "Proyectos", "en": "Projects"}, "sub.proyectos": {"es": "Registro y control", "en": "Tracking and control"}, "title.locaciones": {"es": "Locaciones", "en": "Locations"}, "sub.locaciones": {"es": "Proyectos agrupados por edificio/locación", "en": "Projects grouped by building/location"}, "title.gastos": {"es": "Gastos", "en": "Expenses"}, "sub.gastos": {"es": "Materiales, herramientas, renta", "en": "Materials, tools, rent"}, "title.nomina": {"es": "Nómina", "en": "Payroll"}, "sub.nomina": {"es": "Pagos a empleados", "en": "Employee payments"}, "title.cobros": {"es": "Cobros", "en": "Collections"}, "sub.cobros": {"es": "Facturas y pagos del hotel", "en": "Invoices and payments"}, "title.facturacion": {"es": "Facturación", "en": "Invoicing"}, "sub.facturacion": {"es": "Generar y enviar facturas", "en": "Generate and send invoices"}, "title.banco": {"es": "Banco", "en": "Bank"}, "sub.banco": {"es": "Bank of America · Conectado via Plaid", "en": "Bank of America · Connected via Plaid"}, "title.arlene": {"es": "Cuenta de Arlene", "en": "Arlene's Account"}, "sub.arlene": {"es": "Control de pagos y saldo", "en": "Payment and balance tracking"}, "title.mensual": {"es": "Resumen Mensual", "en": "Monthly Summary"}, "sub.mensual": {"es": "Por mes automático", "en": "Automatic monthly"}, "lbl.ya_cobrado": {"es": "Ya Cobrado", "en": "Collected"}, "lbl.por_cobrar": {"es": "Por Cobrar", "en": "Outstanding"}, "lbl.gastosn_mina": {"es": "Gastos+Nómina", "en": "Expenses+Payroll"}, "lbl.ganancia_bruta": {"es": "Ganancia Bruta", "en": "Gross Profit"}, "lbl.tu_parte_55": {"es": "Tu Parte 50%", "en": "Your Share 50%"}, "lbl.arlene_45": {"es": "Arlene 50%", "en": "Arlene 50%"}, "lbl.falta_arlene": {"es": "Falta Arlene", "en": "Owed to Arlene"}, "lbl.arlene": {"es": "Arlene", "en": "Arlene"}, "lbl.le_toca": {"es": "Le Toca", "en": "Owed"}, "lbl.pagado": {"es": "Pagado", "en": "Paid"}, "lbl.falta": {"es": "Falta", "en": "Remaining"}, "lbl.proyectos": {"es": "Proyectos", "en": "Projects"}, "lbl.total": {"es": "Total", "en": "Total"}, "lbl.completados": {"es": "Completados", "en": "Completed"}, "lbl.activos": {"es": "Activos", "en": "Active"}, "lbl.pendientes": {"es": "Pendientes", "en": "Pending"}, "lbl.lista_de_proyectos": {"es": "Lista de Proyectos", "en": "Project List"}, "lbl.registro": {"es": "Registro", "en": "Log"}, "lbl.registro_de_n_mina": {"es": "Registro de Nómina", "en": "Payroll Log"}, "lbl.por_empleado": {"es": "Por Empleado", "en": "By Employee"}, "lbl.cobrado": {"es": "Cobrado", "en": "Collected"}, "lbl.pendiente": {"es": "Pendiente", "en": "Pending"}, "lbl.total_facturado": {"es": "Total Facturado", "en": "Total Invoiced"}, "lbl.facturas_guardadas": {"es": "Facturas Guardadas", "en": "Saved Invoices"}, "lbl.transacciones_recientes": {"es": "Transacciones Recientes", "en": "Recent Transactions"}, "lbl.le_toca_45": {"es": "Le Toca (50%)", "en": "Owed (50%)"}, "lbl.ya_pagado": {"es": "Ya Pagado", "en": "Already Paid"}, "lbl.falta_pagar": {"es": "Falta Pagar", "en": "Still Owed"}, "lbl.historial": {"es": "Historial", "en": "History"}, "lbl.reporte_anual": {"es": "Reporte Anual", "en": "Annual Report"}, "lbl.pct_pagado": {"es": "% Pagado", "en": "% Paid"}, "fld.proyecto": {"es": "# Proyecto", "en": "Project #"}, "fld.cliente": {"es": "Cliente", "en": "Client"}, "fld.nombre_del_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.locacion": {"es": "Locación", "en": "Location"}, "fld.comision_pedro": {"es": "% Comisión Pedro", "en": "% Pedro Commission"}, "fld.fecha_inicio": {"es": "Fecha Inicio", "en": "Start Date"}, "fld.fecha_fin": {"es": "Fecha Fin", "en": "End Date"}, "fld.valor_cotizado": {"es": "Valor Cotizado $", "en": "Quoted Value $"}, "fld.estado": {"es": "Estado", "en": "Status"}, "fld.notas": {"es": "Notas", "en": "Notes"}, "fld.fecha": {"es": "Fecha", "en": "Date"}, "fld.categoria": {"es": "Categoría", "en": "Category"}, "fld.monto": {"es": "Monto $", "en": "Amount $"}, "fld.descripcion": {"es": "Descripción", "en": "Description"}, "fld.recibo": {"es": "Recibo", "en": "Receipt"}, "fld.foto_del_recibogasto_opcional": {"es": "Foto del recibo/gasto (opcional)", "en": "Receipt/expense photo (optional)"}, "fld.empleado": {"es": "Empleado", "en": "Employee"}, "fld.total_pagado": {"es": "Total Pagado $", "en": "Total Paid $"}, "fld.horasdias": {"es": "Horas/Días", "en": "Hours/Days"}, "fld.tarifa": {"es": "Tarifa $", "en": "Rate $"}, "fld.facturaproyecto": {"es": "# Factura/Proyecto", "en": "Invoice/Project #"}, "fld.tipo_pago": {"es": "Tipo Pago", "en": "Payment Type"}, "fld.chequewire": {"es": "# Cheque/Wire", "en": "# Check/Wire"}, "fld.fecha_pago": {"es": "Fecha Pago", "en": "Payment Date"}, "fld.factura": {"es": "# Factura", "en": "Invoice #"}, "fld.bill_to": {"es": "Bill To", "en": "Bill To"}, "fld.nota_opcional": {"es": "Nota (opcional)", "en": "Note (optional)"}, "fld.para_email": {"es": "Para (email)", "en": "To (email)"}, "fld.cc_opcional": {"es": "CC (opcional)", "en": "CC (optional)"}, "fld.asunto": {"es": "Asunto", "en": "Subject"}, "fld.mensaje": {"es": "Mensaje", "en": "Message"}, "ct.agregar_proyecto": {"es": "Agregar Proyecto", "en": "Add Project"}, "ct.registrar_gasto": {"es": "Registrar Gasto", "en": "Log Expense"}, "ct.registrar_pago": {"es": "Registrar Pago", "en": "Log Payroll"}, "ct.registrar_factura": {"es": "Registrar Factura", "en": "Save Invoice"}, "ct.nueva_factura": {"es": "Nueva Factura", "en": "New Invoice"}, "ct.acceso_de_arlene_a_la_app": {"es": "Acceso de Arlene a la app", "en": "Arlene's Access to the App"}, "ct.registrar_abono": {"es": "Registrar Abono", "en": "Log Payment"}, "ct.reporte_para_taxes_contador": {"es": "Reporte para Taxes / Contador", "en": "Report for Taxes / Accountant"}, "btn.cancelar": {"es": "Cancelar", "en": "Cancel"}, "btn.cargando": {"es": "Cargando...", "en": "Loading..."}, "btn.conectar_bofa": {"es": "Conectar Bank of America", "en": "Connect Bank of America"}, "btn.enter": {"es": "Enter", "en": "Enter"}, "btn.enviar_email": {"es": "✉ Enviar por Email", "en": "✉ Send by Email"}, "btn.descargar_pdf": {"es": "⬇ Descargar PDF", "en": "⬇ Download PDF"}, "btn.exportar_excel": {"es": "⬇ Exportar a Excel", "en": "⬇ Export to Excel"}, "btn.guardar": {"es": "💾 Guardar", "en": "💾 Save"}, "btn.enviar": {"es": "📨 Enviar", "en": "📨 Send"}, "btn.agregar_item": {"es": "+ Agregar Ítem", "en": "+ Add Item"}, "btn.registrar_abono": {"es": "+ Registrar Abono", "en": "+ Log Payment"}, "btn.registrar_gasto": {"es": "+ Registrar Gasto", "en": "+ Log Expense"}, "btn.registrar_pago": {"es": "+ Registrar Pago", "en": "+ Log Payroll"}, "btn.registrar": {"es": "+ Registrar", "en": "+ Save"}, "ct.cuenta_arlene": {"es": "💜 Cuenta de Arlene", "en": "💜 Arlene's Account"}, "th.nombre": {"es": "Nombre", "en": "Name"}, "th.valor": {"es": "Valor", "en": "Value"}, "th.ganancia": {"es": "Ganancia", "en": "Profit"}, "th.cerrado": {"es": "Cerrado", "en": "Closed"}, "th.factura": {"es": "Factura", "en": "Invoice"}, "th.monto": {"es": "Monto", "en": "Amount"}, "th.tipo": {"es": "Tipo", "en": "Type"}, "th.cheque": {"es": "#Cheque", "en": "#Check"}};
+const I18N = {"tab.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "tab.proyectos": {"es": "Proyectos", "en": "Projects"}, "tab.locaciones": {"es": "Locaciones", "en": "Locations"}, "tab.gastos": {"es": "Gastos", "en": "Expenses"}, "tab.nomina": {"es": "Nómina", "en": "Payroll"}, "tab.cobros": {"es": "Cobros", "en": "Collections"}, "tab.facturas": {"es": "Facturas", "en": "Invoices"}, "tab.banco": {"es": "Banco", "en": "Bank"}, "tab.arlene": {"es": "Arlene", "en": "Arlene"}, "tab.mensual": {"es": "Mensual", "en": "Monthly"}, "title.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "title.proyectos": {"es": "Proyectos", "en": "Projects"}, "sub.proyectos": {"es": "Registro y control", "en": "Tracking and control"}, "title.locaciones": {"es": "Locaciones", "en": "Locations"}, "sub.locaciones": {"es": "Proyectos agrupados por edificio/locación", "en": "Projects grouped by building/location"}, "title.gastos": {"es": "Gastos", "en": "Expenses"}, "sub.gastos": {"es": "Materiales, herramientas, renta", "en": "Materials, tools, rent"}, "title.nomina": {"es": "Nómina", "en": "Payroll"}, "sub.nomina": {"es": "Pagos a empleados", "en": "Employee payments"}, "title.cobros": {"es": "Cobros", "en": "Collections"}, "sub.cobros": {"es": "Facturas y pagos del hotel", "en": "Invoices and payments"}, "title.facturacion": {"es": "Facturación", "en": "Invoicing"}, "sub.facturacion": {"es": "Generar y enviar facturas", "en": "Generate and send invoices"}, "title.banco": {"es": "Banco", "en": "Bank"}, "sub.banco": {"es": "Bank of America · Conectado via Plaid", "en": "Bank of America · Connected via Plaid"}, "title.arlene": {"es": "Cuenta de Arlene", "en": "Arlene's Account"}, "sub.arlene": {"es": "Control de pagos y saldo", "en": "Payment and balance tracking"}, "title.mensual": {"es": "Resumen Mensual", "en": "Monthly Summary"}, "sub.mensual": {"es": "Por mes automático", "en": "Automatic monthly"}, "lbl.ya_cobrado": {"es": "Ya Cobrado", "en": "Collected"}, "lbl.por_cobrar": {"es": "Por Cobrar", "en": "Outstanding"}, "lbl.gastosn_mina": {"es": "Gastos+Nómina", "en": "Expenses+Payroll"}, "lbl.ganancia_bruta": {"es": "Ganancia Bruta", "en": "Gross Profit"}, "lbl.tu_parte_55": {"es": "Tu Parte 50%", "en": "Your Share 50%"}, "lbl.arlene_45": {"es": "Arlene 50%", "en": "Arlene 50%"}, "lbl.falta_arlene": {"es": "Falta Arlene", "en": "Owed to Arlene"}, "lbl.arlene": {"es": "Arlene", "en": "Arlene"}, "lbl.le_toca": {"es": "Le Toca", "en": "Owed"}, "lbl.pagado": {"es": "Pagado", "en": "Paid"}, "lbl.falta": {"es": "Falta", "en": "Remaining"}, "lbl.proyectos": {"es": "Proyectos", "en": "Projects"}, "lbl.total": {"es": "Total", "en": "Total"}, "lbl.completados": {"es": "Completados", "en": "Completed"}, "lbl.activos": {"es": "Activos", "en": "Active"}, "lbl.pendientes": {"es": "Pendientes", "en": "Pending"}, "lbl.lista_de_proyectos": {"es": "Lista de Proyectos", "en": "Project List"}, "lbl.registro": {"es": "Registro", "en": "Log"}, "lbl.registro_de_n_mina": {"es": "Registro de Nómina", "en": "Payroll Log"}, "lbl.por_empleado": {"es": "Por Empleado", "en": "By Employee"}, "lbl.cobrado": {"es": "Cobrado", "en": "Collected"}, "lbl.pendiente": {"es": "Pendiente", "en": "Pending"}, "lbl.total_facturado": {"es": "Total Facturado", "en": "Total Invoiced"}, "lbl.facturas_guardadas": {"es": "Facturas Guardadas", "en": "Saved Invoices"}, "lbl.transacciones_recientes": {"es": "Transacciones Recientes", "en": "Recent Transactions"}, "lbl.le_toca_45": {"es": "Le Toca (50%)", "en": "Owed (50%)"}, "lbl.ya_pagado": {"es": "Ya Pagado", "en": "Already Paid"}, "lbl.falta_pagar": {"es": "Falta Pagar", "en": "Still Owed"}, "lbl.historial": {"es": "Historial", "en": "History"}, "lbl.reporte_anual": {"es": "Reporte Anual", "en": "Annual Report"}, "lbl.pct_pagado": {"es": "% Pagado", "en": "% Paid"}, "fld.proyecto": {"es": "# Proyecto", "en": "Project #"}, "fld.cliente": {"es": "Cliente", "en": "Client"}, "fld.nombre_del_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.locacion": {"es": "Locación", "en": "Location"}, "fld.comision_pedro": {"es": "% Comisión Pedro", "en": "% Pedro Commission"}, "fld.fecha_inicio": {"es": "Fecha Inicio", "en": "Start Date"}, "fld.fecha_fin": {"es": "Fecha Fin", "en": "End Date"}, "fld.valor_cotizado": {"es": "Valor Cotizado $", "en": "Quoted Value $"}, "fld.estado": {"es": "Estado", "en": "Status"}, "fld.notas": {"es": "Notas", "en": "Notes"}, "fld.fecha": {"es": "Fecha", "en": "Date"}, "fld.categoria": {"es": "Categoría", "en": "Category"}, "fld.monto": {"es": "Monto $", "en": "Amount $"}, "fld.descripcion": {"es": "Descripción", "en": "Description"}, "fld.recibo": {"es": "Recibo", "en": "Receipt"}, "fld.foto_del_recibogasto_opcional": {"es": "Foto del recibo/gasto (opcional)", "en": "Receipt/expense photo (optional)"}, "fld.empleado": {"es": "Empleado", "en": "Employee"}, "fld.total_pagado": {"es": "Total Pagado $", "en": "Total Paid $"}, "fld.horasdias": {"es": "Horas/Días", "en": "Hours/Days"}, "fld.tarifa": {"es": "Tarifa $", "en": "Rate $"}, "fld.facturaproyecto": {"es": "# Factura/Proyecto", "en": "Invoice/Project #"}, "fld.tipo_pago": {"es": "Tipo Pago", "en": "Payment Type"}, "fld.chequewire": {"es": "# Cheque/Wire", "en": "# Check/Wire"}, "fld.fecha_pago": {"es": "Fecha Pago", "en": "Payment Date"}, "fld.factura": {"es": "# Factura", "en": "Invoice #"}, "fld.bill_to": {"es": "Bill To", "en": "Bill To"}, "fld.nota_opcional": {"es": "Nota (opcional)", "en": "Note (optional)"}, "fld.para_email": {"es": "Para (email)", "en": "To (email)"}, "fld.cc_opcional": {"es": "CC (opcional)", "en": "CC (optional)"}, "fld.asunto": {"es": "Asunto", "en": "Subject"}, "fld.mensaje": {"es": "Mensaje", "en": "Message"}, "ct.agregar_proyecto": {"es": "Agregar Proyecto", "en": "Add Project"}, "ct.registrar_gasto": {"es": "Registrar Gasto", "en": "Log Expense"}, "ct.registrar_pago": {"es": "Registrar Pago", "en": "Log Payroll"}, "ct.registrar_factura": {"es": "Registrar Factura", "en": "Save Invoice"}, "ct.nueva_factura": {"es": "Nueva Factura", "en": "New Invoice"}, "ct.acceso_de_arlene_a_la_app": {"es": "Acceso de Arlene a la app", "en": "Arlene's Access to the App"}, "ct.registrar_abono": {"es": "Registrar Abono", "en": "Log Payment"}, "ct.reporte_para_taxes_contador": {"es": "Reporte para Taxes / Contador", "en": "Report for Taxes / Accountant"}, "btn.cancelar": {"es": "Cancelar", "en": "Cancel"}, "btn.cargando": {"es": "Cargando...", "en": "Loading..."}, "btn.conectar_bofa": {"es": "Conectar Bank of America", "en": "Connect Bank of America"}, "btn.enter": {"es": "Enter", "en": "Enter"}, "btn.enviar_email": {"es": "✉ Enviar por Email", "en": "✉ Send by Email"}, "btn.descargar_pdf": {"es": "⬇ Descargar PDF", "en": "⬇ Download PDF"}, "btn.exportar_excel": {"es": "⬇ Exportar a Excel", "en": "⬇ Export to Excel"}, "btn.guardar": {"es": "💾 Guardar", "en": "💾 Save"}, "btn.enviar": {"es": "📨 Enviar", "en": "📨 Send"}, "btn.agregar_item": {"es": "+ Agregar Ítem", "en": "+ Add Item"}, "btn.registrar_abono": {"es": "+ Registrar Abono", "en": "+ Log Payment"}, "btn.registrar_gasto": {"es": "+ Registrar Gasto", "en": "+ Log Expense"}, "btn.registrar_pago": {"es": "+ Registrar Pago", "en": "+ Log Payroll"}, "btn.registrar": {"es": "+ Registrar", "en": "+ Save"}, "ct.cuenta_arlene": {"es": "💜 Cuenta de Arlene", "en": "💜 Arlene's Account"}, "th.nombre": {"es": "Nombre", "en": "Name"}, "th.valor": {"es": "Valor", "en": "Value"}, "th.ganancia": {"es": "Ganancia", "en": "Profit"}, "th.cerrado": {"es": "Cerrado", "en": "Closed"}, "th.factura": {"es": "Factura", "en": "Invoice"}, "th.monto": {"es": "Monto", "en": "Amount"}, "th.tipo": {"es": "Tipo", "en": "Type"}, "th.cheque": {"es": "#Cheque", "en": "#Check"}, "ct.gastos_tot": {"es": "Gastos", "en": "Expenses"}, "ct.nomina_tot": {"es": "Nómina", "en": "Payroll"}, "ct.ganancia_pd": {"es": "Ganancia", "en": "Profit"}, "sl.agregar_gasto": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "sl.agregar_nomina": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "btn.agregar_gasto_pd": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "btn.agregar_nomina_pd": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "chat.greeting": {"es": "Hola! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?", "en": "Hi! I'm your BH Pro Services assistant. I can analyze your numbers, calculate profits, or answer any question about the business. How can I help?"}, "btn.agregar_proyecto_submit": {"es": "+ Agregar Proyecto", "en": "+ Add Project"}, "btn.reemplazar_datos": {"es": "⚠️ Reemplazar todo con los datos horneados", "en": "⚠️ Replace everything with the baked-in data"}, "ct.importar_excel": {"es": "📥 Importar/Actualizar desde Excel", "en": "📥 Import/Update from Excel"}, "ct.datos_referencia": {"es": "📦 Datos de referencia (11 ago 2026)", "en": "📦 Reference data (Aug 11, 2026)"}, "p.excel_import_desc": {"es": "Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.", "en": "Upload your projects Excel file. Recognized columns: num, nombre, cliente, valor, estado, notas, loc (case and order don't matter). If the project # already exists, it updates; if not, it's added."}, "p.datos_referencia_desc": {"es": "La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.", "en": "The app has your 121 projects, 49 expenses, 254 payroll records, 121 collections, and 7 payments to Arlene baked in (from the Excel you uploaded). Since your server already has saved data, they don't load on their own — use this button to replace EVERYTHING currently there with that reference data."}, "opt.activo": {"es": "Activo", "en": "Active"}, "opt.completado": {"es": "Completado", "en": "Completed"}, "opt.pendiente": {"es": "Pendiente", "en": "Pending"}, "fld.items_factura": {"es": "Ítems de la factura", "en": "Invoice items"}};
 let CURRENT_LANG = 'es';
+function tt(es, en) { return CURRENT_LANG === 'en' ? en : es; }
+
 function applyLanguage(lang) {
   CURRENT_LANG = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -1095,6 +1178,19 @@ function applyLanguage(lang) {
   if (btn) btn.textContent = lang === 'es' ? 'EN' : 'ES';
   try { localStorage.setItem('bhpro_lang', lang); } catch(e) {}
   if (typeof renderPendientes === 'function' && document.getElementById('dash-pendientes')) renderPendientes();
+  if (document.getElementById('banco') && document.getElementById('banco').classList.contains('active')) loadBankData();
+  if (PD_CURRENT_NUM) renderProjectDetail();
+  const itemsWrap = document.getElementById('f-items');
+  if (itemsWrap && itemsWrap.children.length) {
+    const existingItems = Array.from(itemsWrap.querySelectorAll('.inv-item-row')).map(row=>({
+      desc: row.querySelector('.ii-desc').value,
+      detail: row.querySelector('.ii-detail').value,
+      qty: parseFloat(row.querySelector('.ii-qty').value)||0,
+      rate: parseFloat(row.querySelector('.ii-rate').value)||0
+    }));
+    itemsWrap.innerHTML = '';
+    existingItems.forEach(it => addInvoiceItemRow(it));
+  }
 }
 function toggleLanguage() {
   applyLanguage(CURRENT_LANG === 'es' ? 'en' : 'es');
@@ -1114,16 +1210,16 @@ function addInvoiceItemRow(item) {
   row.style = 'border:1px solid #2a4d80;border-radius:10px;padding:12px;margin-bottom:10px;background:var(--black-3);';
   row.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <span style="font-size:.65rem;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;">Ítem</span>
-      <button type="button" class="del" onclick="this.closest('.inv-item-row').remove();updateInvoiceTotalPreview();">✕ Quitar</button>
+      <span style="font-size:.65rem;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;">${tt('Ítem','Item')}</span>
+      <button type="button" class="del" onclick="this.closest('.inv-item-row').remove();updateInvoiceTotalPreview();">${tt('✕ Quitar','✕ Remove')}</button>
     </div>
-    <div class="fl" style="font-size:.62rem;">Descripción del ítem</div>
-    <textarea class="ii-desc" placeholder="Ej. Apartment Interior Painting" rows="2" style="width:100%;font-size:1rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.desc||'')}</textarea>
-    <div class="fl" style="font-size:.62rem;">Detalle / lo que incluye (opcional)</div>
-    <textarea class="ii-detail" placeholder="Ej. Repainting of interior walls, baseboards, and doors..." rows="3" style="width:100%;font-size:.85rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.detail||'')}</textarea>
+    <div class="fl" style="font-size:.62rem;">${tt('Descripción del ítem','Item description')}</div>
+    <textarea class="ii-desc" placeholder="${tt('Ej. Apartment Interior Painting','E.g. Apartment Interior Painting')}" rows="2" style="width:100%;font-size:1rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.desc||'')}</textarea>
+    <div class="fl" style="font-size:.62rem;">${tt('Detalle / lo que incluye (opcional)','Detail / what it includes (optional)')}</div>
+    <textarea class="ii-detail" placeholder="${tt('Ej. Repintado de paredes, zócalos y puertas...','E.g. Repainting of interior walls, baseboards, and doors...')}" rows="3" style="width:100%;font-size:.85rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.detail||'')}</textarea>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div><div class="fl" style="font-size:.62rem;">Cantidad</div><input type="number" class="ii-qty" value="${item.qty||1}" min="0" step="1" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
-      <div><div class="fl" style="font-size:.62rem;">Precio $</div><input type="number" class="ii-rate" value="${item.rate||0}" min="0" step="0.01" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
+      <div><div class="fl" style="font-size:.62rem;">${tt('Cantidad','Quantity')}</div><input type="number" class="ii-qty" value="${item.qty||1}" min="0" step="1" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
+      <div><div class="fl" style="font-size:.62rem;">${tt('Precio $','Price $')}</div><input type="number" class="ii-rate" value="${item.rate||0}" min="0" step="0.01" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
     </div>`;
   wrap.appendChild(row);
   updateInvoiceTotalPreview();
@@ -1180,13 +1276,14 @@ function saveInvoice() {
   const built = buildInvoiceFromForm();
   if (!built) return alert('Ingresa # de factura y al menos un ítem con cantidad/precio');
   const inv = Object.assign({id:gid(), sent:false, createdAt:new Date().toISOString()}, built);
+  const invEmpresa = inv.empresa || ACTIVE_COMPANY;
   S.facturas.push(inv);
-  // Add to cobros if not exists
-  if (!S.cobros.find(c=>c.num===inv.number)) {
-    S.cobros.push({ id:gid(), num:inv.number, cliente:inv.billTo, monto:inv.amount, fecha:inv.date, estado:'Pendiente', tipo:'', cheque:'', fpago:'' });
+  // Add to cobros if not exists (scoped to this company, never cross-matches the other company)
+  if (!S.cobros.find(c=>c.num===inv.number && (c.empresa||invEmpresa)===invEmpresa)) {
+    S.cobros.push({ id:gid(), num:inv.number, cliente:inv.billTo, monto:inv.amount, fecha:inv.date, estado:'Pendiente', tipo:'', cheque:'', fpago:'', empresa: invEmpresa });
   }
-  // Update proyecto estado if matches, or CREATE the project if it doesn't exist yet
-  const proy = S.proyectos.find(p=>p.num===inv.number);
+  // Update proyecto estado if matches WITHIN THE SAME COMPANY, or CREATE the project if it doesn't exist yet
+  const proy = S.proyectos.find(p=>p.num===inv.number && (p.empresa||'BH Pro')===invEmpresa);
   if (proy) {
     if (proy.estado==='Activo') proy.estado='Completado';
   } else {
@@ -1198,7 +1295,7 @@ function saveInvoice() {
       valor: inv.amount || 0,
       estado: 'Completado',
       notas: '', loc: '',
-      empresa: inv.empresa || ACTIVE_COMPANY,
+      empresa: invEmpresa,
       pedroPct: 0
     });
   }
@@ -1329,7 +1426,7 @@ async function loadBankData() {
       const txDiv = document.getElementById('bank-txs');
       LAST_BANK_NOTES = data.notes || {};
       if (data.syncing || !data.transactions || !data.transactions.length) {
-        txDiv.innerHTML = `<div style="color:var(--gray);font-size:.75rem;padding:12px;text-align:center;">✅ Cuenta conectada. Plaid está sincronizando tus transacciones — esto puede tardar unos minutos la primera vez. Vuelve a esta pestaña en un rato.</div>`;
+        txDiv.innerHTML = `<div style="color:var(--gray);font-size:.75rem;padding:12px;text-align:center;">✅ ${tt('Cuenta conectada. Plaid está sincronizando tus transacciones — esto puede tardar unos minutos la primera vez. Vuelve a esta pestaña en un rato.','Account connected. Plaid is syncing your transactions — this can take a few minutes the first time. Check back on this tab soon.')}</div>`;
       } else {
         LAST_BANK_TXS = {};
         const importedGastoIds = new Set(S.gastos.filter(g=>g.plaid_tx_id).map(g=>g.plaid_tx_id));
@@ -1349,8 +1446,8 @@ function renderTxRow(tx, importedGastoIds, importedCobroIds) {
   const already = isDeposit ? importedCobroIds.has(tx.transaction_id) : importedGastoIds.has(tx.transaction_id);
   const note = LAST_BANK_NOTES[tx.transaction_id] || '';
   const actionHtml = already
-    ? `<span style="color:var(--green);font-size:.65rem;white-space:nowrap;">✓ ${isDeposit?'En Cobros':'En Gastos'}</span>`
-    : `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:4px 8px;" onclick="toggleTxCategorize('${tx.transaction_id}')">${isDeposit?'+ Cobro':'+ Gasto'}</button>`;
+    ? `<span style="color:var(--green);font-size:.65rem;white-space:nowrap;">✓ ${isDeposit?tt('En Cobros','In Collections'):tt('En Gastos','In Expenses')}</span>`
+    : `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:4px 8px;" onclick="toggleTxCategorize('${tx.transaction_id}')">${isDeposit?tt('+ Cobro','+ Payment'):tt('+ Gasto','+ Expense')}</button>`;
   const noteIndicator = note ? ' 📝' : '';
   return `<div class="tx-item" style="cursor:pointer;" onclick="toggleTxExpand('${tx.transaction_id}')"><div><div class="tx-name">${tx.name}${noteIndicator}</div><div class="tx-date">${tx.date}</div></div><div style="display:flex;align-items:center;gap:8px;"><div class="tx-amt ${tx.amount>0?'neg':'pos'}">${fmt(Math.abs(tx.amount))}</div><div onclick="event.stopPropagation()">${actionHtml}</div></div></div><div id="tx-expand-${tx.transaction_id}"></div><div id="tx-form-${tx.transaction_id}"></div>`;
 }
@@ -1368,13 +1465,13 @@ function toggleTxExpand(txId) {
   expDiv.innerHTML = `
     <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0;font-size:.7rem;color:var(--gray);">
       <div style="color:var(--white);font-size:.78rem;margin-bottom:6px;word-break:break-word;">${tx.name}</div>
-      ${merchant ? `<div>Comercio: ${merchant}</div>` : ''}
-      ${category ? `<div>Categoría del banco: ${category}</div>` : ''}
-      ${channel ? `<div>Canal: ${channel}</div>` : ''}
-      <div>Fecha: ${tx.date}</div>
-      <div class="fl" style="font-size:.6rem;margin-top:8px;">Tu nota / observación</div>
-      <textarea id="txnote-${txId}" rows="2" placeholder="Ej. Fue el pago de Acqualina de julio..." style="width:100%;font-size:.8rem;padding:8px;border-radius:6px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);box-sizing:border-box;">${note}</textarea>
-      <button class="btn btn-sm" style="margin-top:6px;" onclick="saveTxNote('${txId}')">Guardar nota</button>
+      ${merchant ? `<div>${tt('Comercio','Merchant')}: ${merchant}</div>` : ''}
+      ${category ? `<div>${tt('Categoría del banco','Bank category')}: ${category}</div>` : ''}
+      ${channel ? `<div>${tt('Canal','Channel')}: ${channel}</div>` : ''}
+      <div>${tt('Fecha','Date')}: ${tx.date}</div>
+      <div class="fl" style="font-size:.6rem;margin-top:8px;">${tt('Tu nota / observación','Your note / remark')}</div>
+      <textarea id="txnote-${txId}" rows="2" placeholder="${tt('Ej. Fue el pago de Acqualina de julio...','E.g. This was the Acqualina payment for July...')}" style="width:100%;font-size:.8rem;padding:8px;border-radius:6px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);box-sizing:border-box;">${note}</textarea>
+      <button class="btn btn-sm" style="margin-top:6px;" onclick="saveTxNote('${txId}')">${tt('Guardar nota','Save note')}</button>
     </div>`;
 }
 
@@ -1397,11 +1494,11 @@ function toggleTxCategorize(txId) {
   if (isDeposit) {
     formDiv.innerHTML = `
       <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0 10px;">
-        <div class="fl" style="font-size:.6rem;">¿De qué proyecto es este cobro?</div>
-        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">Selecciona...</option>${proyOptions}</select>
+        <div class="fl" style="font-size:.6rem;">${tt('¿De qué proyecto es este cobro?','Which project is this payment for?')}</div>
+        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">${tt('Selecciona...','Select...')}</option>${proyOptions}</select>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToCobro('${txId}')">✓ Guardar como Cobro Pagado</button>
-          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">Cancelar</button>
+          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToCobro('${txId}')">${tt('✓ Guardar como Cobro Pagado','✓ Save as Paid Collection')}</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">${tt('Cancelar','Cancel')}</button>
         </div>
       </div>`;
   } else {
@@ -1409,13 +1506,13 @@ function toggleTxCategorize(txId) {
     const catOptions = categorias.map(c=>`<option value="${c}">${c}</option>`).join('');
     formDiv.innerHTML = `
       <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0 10px;">
-        <div class="fl" style="font-size:.6rem;">Categoría</div>
+        <div class="fl" style="font-size:.6rem;">${tt('Categoría','Category')}</div>
         <select id="txcat-${txId}" style="width:100%;margin-bottom:8px;">${catOptions}</select>
-        <div class="fl" style="font-size:.6rem;">Proyecto</div>
-        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">Selecciona...</option>${proyOptions}</select>
+        <div class="fl" style="font-size:.6rem;">${tt('Proyecto','Project')}</div>
+        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">${tt('Selecciona...','Select...')}</option>${proyOptions}</select>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToGasto('${txId}')">✓ Guardar como Gasto</button>
-          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">Cancelar</button>
+          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToGasto('${txId}')">${tt('✓ Guardar como Gasto','✓ Save as Expense')}</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">${tt('Cancelar','Cancel')}</button>
         </div>
       </div>`;
   }
@@ -1454,7 +1551,7 @@ function confirmTxToCobro(txId) {
 }
 
 // ===== RENDER =====
-function renderAll() { renderDash(); renderProy(); renderGasto(); renderNomina(); renderCobro(); renderFacturas(); renderArlene(); renderMensual(); prefillNextInvoiceNumber(); renderLocaciones(); populateProjectSelect('g-pro'); populateProjectSelect('n-pro'); togglePedroField(); }
+function renderAll() { renderDash(); renderProy(); renderGasto(); renderNomina(); renderCobro(); renderFacturas(); renderArlene(); renderMensual(); prefillNextInvoiceNumber(); renderLocaciones(); populateProjectSelect('g-pro', true); populateProjectSelect('n-pro'); togglePedroField(); }
 
 function renderLocaciones() {
   const wrap = document.getElementById('loc-list-view');
@@ -1538,7 +1635,7 @@ function renderPendientes() {
   if (!box) return;
   const isEn = CURRENT_LANG === 'en';
   const proyNumsActivos = new Set(S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>p.num));
-  const cobrosPend = S.cobros.filter(c=>c.estado==='Pendiente' && proyNumsActivos.has(c.num));
+  const cobrosPend = S.cobros.filter(c=>c.estado==='Pendiente' && (c.empresa?c.empresa===ACTIVE_COMPANY:proyNumsActivos.has(c.num)));
   const facturasSinEnviar = S.facturas.filter(f=>!f.sent && (f.empresa||'BH Pro')===ACTIVE_COMPANY);
   const totalPend = cobrosPend.reduce((s,c)=>s+(c.monto||0),0);
   let html = '';
@@ -1562,7 +1659,7 @@ function renderProy() {
   document.getElementById('tb-p').innerHTML=list.slice().reverse().map(p=>{
     const c=calcP(p);tv+=p.valor;tg+=c.g;tn+=c.n;tgan+=c.gan;
     const ec=p.estado==='Completado'?'bc':p.estado==='Activo'?'bp':'bpen';
-    const facturaExiste=S.facturas.find(f=>f.number===p.num);
+    const facturaExiste=S.facturas.find(f=>f.number===p.num && (f.empresa||'BH Pro')===ACTIVE_COMPANY);
     const hasFact=facturaExiste?'✓':'';
     const facturarBtn = facturaExiste ? '' : `<button class="btn btn-sm" style="background:#1B3A6B;font-size:.6rem;padding:3px 6px;" onclick="facturarProyecto('${p.num}')">📄 Facturar</button>`;
     const detailBtn = `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:3px 6px;margin-left:4px;" onclick="openProjectDetail('${p.id}')">📋 Gastos/Nómina</button>`;
@@ -1571,9 +1668,9 @@ function renderProy() {
     const estadoBg = p.estado==='Completado'?'#0a2a1a':p.estado==='Activo'?'#0a1a2a':'#2a1a00';
     const estadoColor = p.estado==='Completado'?'var(--green)':p.estado==='Activo'?'var(--blue)':'var(--gold)';
     const estadoSelect = `<select onchange="changeProyectoEstado('${p.id}',this.value)" style="background:${estadoBg};color:${estadoColor};border:1px solid ${estadoColor}55;border-radius:12px;font-size:.6rem;font-weight:600;text-transform:uppercase;padding:2px 6px;">
-      <option value="Activo" ${p.estado==='Activo'?'selected':''}>Activo</option>
-      <option value="Completado" ${p.estado==='Completado'?'selected':''}>Completado</option>
-      <option value="Pendiente" ${p.estado==='Pendiente'?'selected':''}>Pendiente</option>
+      <option value="Activo" ${p.estado==='Activo'?'selected':''}>${tt('Activo','Active')}</option>
+      <option value="Completado" ${p.estado==='Completado'?'selected':''}>${tt('Completado','Completed')}</option>
+      <option value="Pendiente" ${p.estado==='Pendiente'?'selected':''}>${tt('Pendiente','Pending')}</option>
     </select>`;
     return`<tr><td>${p.num}</td><td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</td><td>${fmt(p.valor)}</td><td style="color:var(--red)">${fmt(c.g)}</td><td style="color:var(--red)">${fmt(c.n)}</td><td style="color:${c.gan>=0?'var(--green)':'var(--red)'}">${fmt(c.gan)}</td><td>${estadoSelect}</td><td style="text-align:center;"><input type="checkbox" ${cerrado?'checked':''} onchange="toggleProyectoCerrado('${p.id}')" style="width:18px;height:18px;cursor:pointer;"></td><td style="color:var(--green);text-align:center;">${hasFact}${facturarBtn}${detailBtn}</td><td><button class="del" onclick="delP('${p.id}')">✕</button></td></tr>`;
   }).join('');
@@ -1592,10 +1689,10 @@ function proyNumsEmpresaActiva(){ return new Set(S.proyectos.filter(p=>(p.empres
 function renderGasto() {
   const q=(document.getElementById('sq-g')?.value||'').toLowerCase().trim();
   const proyNums = proyNumsEmpresaActiva();
-  const gastosEmpresa = S.gastos.filter(g=>proyNums.has(g.proy));
+  const gastosEmpresa = S.gastos.filter(g=> g.empresa ? g.empresa===ACTIVE_COMPANY : proyNums.has(g.proy));
   const list=q?gastosEmpresa.filter(g=>(g.proy||'').toLowerCase().includes(q)||(g.cat||'').toLowerCase().includes(q)||(g.desc||'').toLowerCase().includes(q)):gastosEmpresa;
   let tot=0;
-  document.getElementById('tb-g').innerHTML=list.slice().reverse().map(g=>{tot+=g.monto;const fotoBtn=g.foto?`<button class="btn btn-sm" style="background:#1B3A6B;" onclick="viewGastoFoto('${g.id}')">📷</button>`:'';return`<tr><td>${fd(g.fecha)}</td><td>${g.proy||''}</td><td>${g.cat}</td><td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.desc||''}</td><td style="color:var(--red)">${fmt(g.monto)}</td><td>${fotoBtn}<button class="del" onclick="delG('${g.id}')">✕</button></td></tr>`;}).join('');
+  document.getElementById('tb-g').innerHTML=list.slice().reverse().map(g=>{tot+=g.monto;const fotoBtn=g.foto?`<button class="btn btn-sm" style="background:#1B3A6B;" onclick="viewGastoFoto('${g.id}')">📷</button>`:'';const proyLabel=g.proy?`<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${g.proy}')">${g.proy}</span>`:'<span style="color:var(--gold);font-size:.65rem;">General</span>';return`<tr><td>${fd(g.fecha)}</td><td>${proyLabel}</td><td>${g.cat}</td><td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.desc||''}</td><td style="color:var(--red)">${fmt(g.monto)}</td><td>${fotoBtn}<button class="del" onclick="delG('${g.id}')">✕</button></td></tr>`;}).join('');
   document.getElementById('tf-gt').textContent=fmt(tot);
   const si=document.getElementById('si-g');
   if(si)si.textContent=q?list.length+' · Total: '+fmt(tot):'';
@@ -1607,7 +1704,7 @@ function renderNomina() {
   const nominaEmpresa = S.nomina.filter(n=>proyNums.has(n.proy));
   const list=q?nominaEmpresa.filter(n=>(n.empleado||'').toLowerCase().includes(q)||(n.proy||'').toLowerCase().includes(q)||(n.notas||'').toLowerCase().includes(q)):nominaEmpresa;
   let tot=0;
-  document.getElementById('tb-n').innerHTML=list.slice().reverse().map(n=>{tot+=n.total;return`<tr><td>${fd(n.fecha)}</td><td>${n.proy||''}</td><td>${n.empleado}</td><td>${n.horas}</td><td>${fmt(n.tarifa)}</td><td style="color:var(--green)">${fmt(n.total)}</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.notas||''}</td><td><button class="del" onclick="delN('${n.id}')">✕</button></td></tr>`;}).join('');
+  document.getElementById('tb-n').innerHTML=list.slice().reverse().map(n=>{tot+=n.total;const proyLabel=n.proy?`<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${n.proy}')">${n.proy}</span>`:'';return`<tr><td>${fd(n.fecha)}</td><td>${proyLabel}</td><td>${n.empleado}</td><td>${n.horas}</td><td>${fmt(n.tarifa)}</td><td style="color:var(--green)">${fmt(n.total)}</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.notas||''}</td><td><button class="del" onclick="delN('${n.id}')">✕</button></td></tr>`;}).join('');
   document.getElementById('tf-nt').textContent=fmt(tot);
   const si=document.getElementById('si-n');
   if(si)si.textContent=q?list.length+' registro'+(list.length!==1?'s':'')+' · Total: '+fmt(tot):'';
@@ -1623,13 +1720,13 @@ function renderNomina() {
 function renderCobro() {
   const q=(document.getElementById('sq-c')?.value||'').toLowerCase().trim();
   const proyNums = proyNumsEmpresaActiva();
-  const cobrosEmpresa = S.cobros.filter(c=>proyNums.has(c.num));
+  const cobrosEmpresa = S.cobros.filter(c=> c.empresa ? c.empresa===ACTIVE_COMPANY : proyNums.has(c.num));
   const list=q?cobrosEmpresa.filter(c=>(c.num||'').toLowerCase().includes(q)||(c.cliente||'').toLowerCase().includes(q)||(c.estado||'').toLowerCase().includes(q)||(c.cheque||'').toLowerCase().includes(q)):cobrosEmpresa;
   let pag=0,pen=0;
   document.getElementById('tb-c').innerHTML=list.slice().reverse().map(c=>{
     if(c.estado==='Pagado')pag+=c.monto;else pen+=c.monto;
     const ec=c.estado==='Pagado'?'bp':'bpen';
-    return`<tr><td>${c.num}</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.cliente||''}</td><td>${fmt(c.monto)}</td><td>${fd(c.fecha)}</td><td>${c.tipo||''}</td><td>${c.cheque||''}</td><td><span class="badge ${ec}" onclick="toggleCobro('${c.id}')">${c.estado}</span></td><td><button class="del" onclick="delC('${c.id}')">✕</button></td></tr>`;
+    return`<tr><td><span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${c.num}')">${c.num}</span></td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.cliente||''}</td><td>${fmt(c.monto)}</td><td>${fd(c.fecha)}</td><td>${c.tipo||''}</td><td>${c.cheque||''}</td><td><span class="badge ${ec}" onclick="toggleCobro('${c.id}')">${c.estado}</span></td><td><button class="del" onclick="delC('${c.id}')">✕</button></td></tr>`;
   }).join('');
   document.getElementById('ct-pag').textContent=fmt(pag);
   document.getElementById('ct-pen').textContent=fmt(pen);
@@ -1650,7 +1747,7 @@ function renderFacturas() {
     const isPaid = cobro && cobro.estado==='Pagado';
     const paidBadge = isPaid ? '<span style="font-size:.6rem;color:#2ECC8A;margin-left:4px;">💰 Pagada</span>' : '<span style="font-size:.6rem;color:var(--red);margin-left:4px;">⏳ Pendiente de pago</span>';
     const sentBadge = f.sent ? '<span style="font-size:.6rem;color:#4a9caf;margin-left:4px;">✓ Enviada</span>' : '';
-    return`<div class="inv-card"><div class="inv-check ${sel?'selected':''}" onclick="toggleInvoiceSelect('${f.id}')"></div><div class="inv-num">#${f.number}</div><div class="inv-info"><div class="inv-name">${f.item||f.projectName||'Invoice'}${sentBadge}${paidBadge}</div><div class="inv-meta">${f.billTo||''} · ${fmt(f.amount)} · ${fd(f.date)}</div></div><div class="inv-actions"><button class="btn btn-sm" onclick="downloadInvoicePDF('${f.id}')">PDF</button><button class="btn btn-sm" style="background:#1B3A6B;" onclick="openEmailModal('${f.id}')">✉</button><button class="del" onclick="delInvoice('${f.id}')">✕</button></div></div>`;
+    return`<div class="inv-card"><div class="inv-check ${sel?'selected':''}" onclick="toggleInvoiceSelect('${f.id}')"></div><div class="inv-num" style="cursor:pointer;text-decoration:underline;" onclick="openProjectDetailByNum('${f.number}')">#${f.number}</div><div class="inv-info"><div class="inv-name">${f.item||f.projectName||'Invoice'}${sentBadge}${paidBadge}</div><div class="inv-meta">${f.billTo||''} · ${fmt(f.amount)} · ${fd(f.date)}</div></div><div class="inv-actions"><button class="btn btn-sm" onclick="downloadInvoicePDF('${f.id}')">PDF</button><button class="btn btn-sm" style="background:#1B3A6B;" onclick="openEmailModal('${f.id}')">✉</button><button class="del" onclick="delInvoice('${f.id}')">✕</button></div></div>`;
   }).join('');
 }
 
@@ -1659,6 +1756,7 @@ function renderArlene() {
   document.getElementById('a-debe').textContent=fmt(t.arlene);
   document.getElementById('a-pag').textContent=fmt(t.apag);
   document.getElementById('a-fal').textContent=fmt(t.afalta);
+  if (USER_ROLE === 'admin') loadArleneLastLogin();
   const pct=t.arlene>0?Math.round(t.apag/t.arlene*100):0;
   document.getElementById('a-pct').textContent=pct+'%';
   const pedroRow = document.getElementById('arlene-pedro-row');
@@ -1684,17 +1782,18 @@ function renderArlene() {
 function renderMensual() {
   const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const data={};
-  S.cobros.filter(c=>c.estado==='Pagado'&&c.fecha).forEach(c=>{
+  const proyNums = proyNumsEmpresaActiva();
+  S.cobros.filter(c=>c.estado==='Pagado'&&c.fecha&&proyNums.has(c.num)).forEach(c=>{
     const d=new Date(c.fecha+'T00:00:00');const k=`${d.getFullYear()}-${d.getMonth()}`;
     if(!data[k])data[k]={mes:meses[d.getMonth()],año:d.getFullYear(),ing:0,g:0,n:0};
     data[k].ing+=c.monto;
   });
-  S.gastos.filter(g=>g.fecha).forEach(g=>{
+  S.gastos.filter(g=>g.fecha && (g.empresa ? g.empresa===ACTIVE_COMPANY : proyNums.has(g.proy))).forEach(g=>{
     const d=new Date(g.fecha+'T00:00:00');const k=`${d.getFullYear()}-${d.getMonth()}`;
     if(!data[k])data[k]={mes:meses[d.getMonth()],año:d.getFullYear(),ing:0,g:0,n:0};
     data[k].g+=g.monto;
   });
-  S.nomina.filter(n=>n.fecha).forEach(n=>{
+  S.nomina.filter(n=>n.fecha&&proyNums.has(n.proy)).forEach(n=>{
     const d=new Date(n.fecha+'T00:00:00');const k=`${d.getFullYear()}-${d.getMonth()}`;
     if(!data[k])data[k]={mes:meses[d.getMonth()],año:d.getFullYear(),ing:0,g:0,n:0};
     data[k].n+=n.total;
@@ -1720,7 +1819,7 @@ async function sendClaude() {
   inp.value = '';
   const msgs = document.getElementById('cmsgs');
   msgs.innerHTML += `<div class="msg mu">${text}</div>`;
-  msgs.innerHTML += `<div class="msg ml" id="lmsg">Analizando...</div>`;
+  msgs.innerHTML += `<div class="msg ml" id="lmsg">${tt('Analizando...','Analyzing...')}</div>`;
   msgs.scrollTop = msgs.scrollHeight;
   const t = calcTotals(ACTIVE_COMPANY);
   const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
