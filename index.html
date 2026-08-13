@@ -510,10 +510,6 @@ select option{background:var(--black-3);}
     <div class="fl" data-i18n="fld.mensaje">Mensaje</div>
     <textarea id="em-msg" rows="4" style="margin-bottom:10px;"></textarea>
     <div id="em-status" style="font-size:.72rem;color:#2ECC8A;margin-bottom:8px;min-height:18px;"></div>
-    <div id="em-fallback-btns" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-      <button type="button" class="btn btn-sm btn-outline" onclick="openMailFallback('mail')">✉️ <span data-i18n="btn.abrir_mail">Abrir en Mail</span></button>
-      <button type="button" class="btn btn-sm btn-outline" onclick="openMailFallback('gmail')">📧 <span data-i18n="btn.abrir_gmail">Abrir en Gmail</span></button>
-    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <button class="btn btn-outline" onclick="closeEmailModal()" data-i18n="btn.cancelar">Cancelar</button>
       <button class="btn" onclick="sendInvoiceEmail()" data-i18n="btn.enviar">📨 Enviar</button>
@@ -690,10 +686,54 @@ async function loadData() {
   } catch(e) { console.log('Load error:', e); }
 }
 
+// Merge our local array with whatever's on the server right now, keyed by id (or num as a
+// fallback for older proyecto records). This exists because saveData() used to just overwrite
+// the server's arrays wholesale with our local copy — so if a teammate (e.g. Arlene) added
+// something on her phone after we last loaded, and we then saved ANY change from our side, her
+// new record would silently vanish. Merging means: keep anything new that only exists on the
+// server (someone else added it), keep anything new that only exists locally (we just added it),
+// and prefer our local version for anything that exists in both (assuming we're the one editing
+// it right now). Anything WE just deleted locally is excluded even if the server still has it —
+// otherwise a delete would look like a "missing local item" and get resurrected by the merge.
+// Deletions are recorded on the SERVER (via /api/data/delete-item, called from each del*()
+// function below) so that ANY device's next save correctly excludes the deleted record — not
+// just the device that deleted it. Without this, a teammate's stale local copy could otherwise
+// "resurrect" something someone else just deleted.
+async function deleteServerItem(key, id) {
+  try {
+    await fetch('/api/data/delete-item', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key, id})});
+  } catch(e) {}
+}
+function mergeArrayById(serverArr, localArr) {
+  serverArr = serverArr || [];
+  localArr = localArr || [];
+  const keyOf = (item) => item.id || ('num:' + item.num);
+  const merged = new Map();
+  serverArr.forEach(item => merged.set(keyOf(item), item));
+  localArr.forEach(item => merged.set(keyOf(item), item)); // local wins on conflicts
+  return Array.from(merged.values());
+}
+
 async function saveData() {
   try {
+    const res = await fetch('/api/data');
+    let serverData = {};
+    if (res.ok) serverData = await res.json();
+    const merged = {
+      proyectos: mergeArrayById(serverData.proyectos, S.proyectos),
+      gastos: mergeArrayById(serverData.gastos, S.gastos),
+      nomina: mergeArrayById(serverData.nomina, S.nomina),
+      cobros: mergeArrayById(serverData.cobros, S.cobros),
+      abonos: mergeArrayById(serverData.abonos, S.abonos),
+      facturas: mergeArrayById(serverData.facturas, S.facturas),
+      locacionesFacturacion: mergeArrayById(serverData.locacionesFacturacion, S.locacionesFacturacion)
+    };
+    S = merged;
     await fetch('/api/data/full', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
-  } catch(e) {}
+  } catch(e) {
+    // If the merge fetch fails for any reason, fall back to the old behavior rather than losing the save entirely
+    try { await fetch('/api/data/full', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)}); } catch(e2) {}
+  }
 }
 
 // ===== NAV =====
@@ -845,7 +885,7 @@ async function addGastoToProject() {
   if (fotoInput) fotoInput.value='';
   renderProjectDetail();
 }
-function delGastoFromProject(id){ S.gastos=S.gastos.filter(g=>g.id!==id); saveData(); renderProjectDetail(); }
+async function delGastoFromProject(id){ S.gastos=S.gastos.filter(g=>g.id!==id); await deleteServerItem('gastos', id); saveData(); renderProjectDetail(); }
 
 function addNominaToProject() {
   if (!PD_CURRENT_NUM) return;
@@ -857,7 +897,7 @@ function addNominaToProject() {
   document.getElementById('pd-n-horas').value = '1';
   renderProjectDetail();
 }
-function delNominaFromProject(id){ S.nomina=S.nomina.filter(n=>n.id!==id); saveData(); renderProjectDetail(); }
+async function delNominaFromProject(id){ S.nomina=S.nomina.filter(n=>n.id!==id); await deleteServerItem('nomina', id); saveData(); renderProjectDetail(); }
 
 function facturarProyecto(num) {
   showTab('facturas');
@@ -974,7 +1014,7 @@ function addProyecto() {
   S.proyectos.push({ id:gid(), num, nombre:nom, cliente:document.getElementById('p-cli').value.trim(), valor:parseFloat(document.getElementById('p-val').value)||0, inicio:document.getElementById('p-ini').value, fin:document.getElementById('p-fin').value, estado:document.getElementById('p-est').value, notas:document.getElementById('p-not').value.trim(), loc:document.getElementById('p-loc').value.trim(), empresa, pedroPct: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro').value)||0) : 0 });
   saveData(); ['p-num','p-nom','p-val','p-ini','p-fin','p-not','p-loc','p-pedro'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
-function delP(id){if(!confirm('¿Eliminar?'))return;S.proyectos=S.proyectos.filter(p=>p.id!==id);saveData();renderAll();}
+async function delP(id){if(!confirm('¿Eliminar?'))return;S.proyectos=S.proyectos.filter(p=>p.id!==id);await deleteServerItem('proyectos', id);saveData();renderAll();}
 function toggleProyectoCerrado(id){
   const p = S.proyectos.find(x=>x.id===id);
   if (!p) return;
@@ -1036,7 +1076,7 @@ async function addGasto() {
   document.getElementById('g-foto-preview').innerHTML='';
   renderAll();
 }
-function delG(id){S.gastos=S.gastos.filter(g=>g.id!==id);saveData();renderAll();}
+async function delG(id){S.gastos=S.gastos.filter(g=>g.id!==id);await deleteServerItem('gastos', id);saveData();renderAll();}
 function viewGastoFoto(id){
   const g = S.gastos.find(x=>x.id===id);
   if(!g||!g.foto) return;
@@ -1050,7 +1090,7 @@ function addNomina() {
   S.nomina.push({ id:gid(), fecha:document.getElementById('n-fec').value, proy:document.getElementById('n-pro').value.trim(), empleado:document.getElementById('n-emp').value, horas:parseFloat(document.getElementById('n-hor').value)||1, tarifa:parseFloat(document.getElementById('n-tar').value)||0, total:tot, notas:document.getElementById('n-not').value.trim() });
   saveData(); ['n-fec','n-pro','n-hor','n-tar','n-tot','n-not'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
-function delN(id){S.nomina=S.nomina.filter(n=>n.id!==id);saveData();renderAll();}
+async function delN(id){S.nomina=S.nomina.filter(n=>n.id!==id);await deleteServerItem('nomina', id);saveData();renderAll();}
 
 function addCobro() {
   const num = document.getElementById('c-num').value.trim();
@@ -1060,7 +1100,7 @@ function addCobro() {
   saveData(); ['c-num','c-mon','c-fec','c-che','c-fpg'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
 function toggleCobro(id){const c=S.cobros.find(c=>c.id===id);if(c){c.estado=c.estado==='Pagado'?'Pendiente':'Pagado';saveData();renderAll();}}
-function delC(id){S.cobros=S.cobros.filter(c=>c.id!==id);saveData();renderAll();}
+async function delC(id){S.cobros=S.cobros.filter(c=>c.id!==id);await deleteServerItem('cobros', id);saveData();renderAll();}
 
 function addAbono() {
   const mon = parseFloat(document.getElementById('aa-mon').value)||0;
@@ -1068,7 +1108,7 @@ function addAbono() {
   S.abonos.push({ id:gid(), fecha:document.getElementById('aa-fec').value, monto:mon, notas:document.getElementById('aa-not').value.trim(), empresa: ACTIVE_COMPANY });
   saveData(); ['aa-fec','aa-mon','aa-not'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
-function delA(id){S.abonos=S.abonos.filter(a=>a.id!==id);saveData();renderAll();}
+async function delA(id){S.abonos=S.abonos.filter(a=>a.id!==id);await deleteServerItem('abonos', id);saveData();renderAll();}
 
 
 let currentEmailInvId = null;
@@ -1084,7 +1124,6 @@ function openEmailModal(invId) {
   document.getElementById('em-sub').value = `Invoice #${inv.number} - ${companyName}`;
   document.getElementById('em-msg').value = `${greeting}\n\nPlease find attached Invoice #${inv.number} for ${inv.item||inv.projectName||'services rendered'} in the amount of $${parseFloat(inv.amount).toFixed(2)}.\n\nPlease don't hesitate to contact us with any questions.\n\nBest regards,\nBrandon Herran\n${companyName}\n${companyEmail}`;
   document.getElementById('em-status').textContent = '';
-  document.getElementById('em-fallback-btns').style.display = 'none';
   document.getElementById('email-modal').style.display = 'flex';
 }
 
@@ -1121,46 +1160,29 @@ async function sendInvoiceEmail() {
       saveData(); renderAll();
       document.getElementById('em-status').textContent = '✓ Enviado a ' + to + ' con el PDF adjunto';
       document.getElementById('em-status').style.color = '#2ECC8A';
-      document.getElementById('em-fallback-btns').style.display = 'none';
       setTimeout(closeEmailModal, 2500);
     } else {
-      // The automatic send failed server-side. mailto/Gmail links can NEVER carry attachments —
-      // that's a browser/OS limitation, not something fixable in code. Instead of auto-redirecting
-      // (which Safari can block, and which forces one specific app), show two buttons so the user
-      // picks which app/account to send from themselves.
+      // The automatic send failed server-side. Falling back to mailto opens the device's own
+      // mail app (Outlook), but mailto links can NEVER carry attachments — that's a browser/OS
+      // limitation, not something fixable in code. window.open() fires IMMEDIATELY (not via
+      // setTimeout) or Safari/iOS will block it as a popup.
       console.error('Email send failed:', data.message);
-      document.getElementById('em-status').innerHTML = `❌ Falló el envío automático (${data.message || 'error desconocido'}).<br>Elige abajo desde dónde quieres enviarla manualmente (sin el PDF adjunto — descárgalo y adjúntalo tú).`;
+      document.getElementById('em-status').innerHTML = `❌ Falló el envío automático (${data.message || 'error desconocido'}).<br>Se abrió tu app de correo, pero SIN el PDF adjunto — descárgalo y adjúntalo tú mismo.`;
       document.getElementById('em-status').style.color = '#E74C3C';
-      window._pendingEmailFallback = { to, cc, subject, message };
-      document.getElementById('em-fallback-btns').style.display = 'grid';
+      const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      window.open(mailtoLink);
     }
   } catch(e) {
-    // Fallback — but say WHY, instead of silently opening Mail with no explanation.
+    // Fallback mailto — but say WHY, instead of silently opening Mail with no explanation.
+    // window.open() must fire IMMEDIATELY (no setTimeout) or Safari/iOS blocks it as a popup.
     const to2 = document.getElementById('em-to').value;
-    const cc2 = document.getElementById('em-cc').value;
     const sub = document.getElementById('em-sub').value;
     const msg = document.getElementById('em-msg').value;
     const reason = e.name === 'AbortError' ? 'se tardó más de 25 segundos en responder' : (e.message || 'error de conexión');
     console.error('Email send exception:', e);
     document.getElementById('em-status').innerHTML = `❌ No se pudo enviar automáticamente (${reason}).<br>Se abrió tu app de correo, pero SIN el PDF adjunto — descárgalo y adjúntalo tú mismo.`;
-    document.getElementById('em-status').innerHTML = `❌ No se pudo enviar automáticamente (${reason}).<br>Elige abajo desde dónde quieres enviarla manualmente (sin el PDF adjunto — descárgalo y adjúntalo tú).`;
     document.getElementById('em-status').style.color = '#E74C3C';
-    window._pendingEmailFallback = { to: to2, cc: cc2, subject: sub, message: msg };
-    document.getElementById('em-fallback-btns').style.display = 'grid';
-  }
-}
-
-function openMailFallback(kind) {
-  const f = window._pendingEmailFallback;
-  if (!f) return;
-  if (kind === 'gmail') {
-    // Gmail's web compose lets the user pick WHICH of their signed-in Gmail accounts to send
-    // from (doesn't have to be info@bhproservices.com) — this is what Brandon asked for.
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(f.to)}${f.cc?`&cc=${encodeURIComponent(f.cc)}`:''}&su=${encodeURIComponent(f.subject)}&body=${encodeURIComponent(f.message)}`;
-    window.open(url, '_blank');
-  } else {
-    const mailtoLink = `mailto:${f.to}?cc=${f.cc||''}&subject=${encodeURIComponent(f.subject)}&body=${encodeURIComponent(f.message)}`;
-    window.open(mailtoLink);
+    window.open(`mailto:${to2}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(msg)}`);
   }
 }
 
@@ -1302,8 +1324,9 @@ function addLocacionFacturacion() {
   populateLocFactSelect();
 }
 
-function delLocacionFacturacion(id) {
+async function delLocacionFacturacion(id) {
   S.locacionesFacturacion = S.locacionesFacturacion.filter(l => l.id !== id);
+  await deleteServerItem('locacionesFacturacion', id);
   saveData();
   renderLocFactList();
   populateLocFactSelect();
@@ -1566,7 +1589,7 @@ async function sendSelectedInvoices() {
   alert(`✅ Enviadas: ${okCount}${failCount?`\n❌ Fallidas: ${failCount} (revisa que EMAIL_USER/EMAIL_PASS estén configurados en Render)`:''}`);
 }
 
-function delInvoice(id) { if(!confirm('¿Eliminar?'))return; S.facturas=S.facturas.filter(f=>f.id!==id); saveData(); renderAll(); }
+async function delInvoice(id) { if(!confirm('¿Eliminar?'))return; S.facturas=S.facturas.filter(f=>f.id!==id); await deleteServerItem('facturas', id); saveData(); renderAll(); }
 
 // ===== BANCO =====
 async function connectBank() {
