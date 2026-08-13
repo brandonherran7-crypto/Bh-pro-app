@@ -264,14 +264,46 @@ select option{background:var(--black-3);}
   <div class="tw"><table><thead><tr><th>#</th><th data-i18n="th.nombre">Nombre</th><th data-i18n="th.valor">Valor</th><th data-i18n="title.gastos">Gastos</th><th data-i18n="title.nomina">Nómina</th><th data-i18n="th.ganancia">Ganancia</th><th data-i18n="fld.estado">Estado</th><th data-i18n="th.cerrado">Cerrado</th><th data-i18n="th.factura">Factura</th><th></th></tr></thead><tbody id="tb-p"></tbody><tfoot><tr class="tr"><td colspan="2">TOTAL</td><td id="tf-v">$0</td><td id="tf-g">$0</td><td id="tf-n">$0</td><td id="tf-gan">$0</td><td colspan="4"></td></tr></tfoot></table></div>
 </div>
 
+<!-- SCOPE OF WORK EXPAND MODAL -->
+<div id="scope-expand-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,10,20,.92);padding:16px;flex-direction:column;">
+  <div style="max-width:600px;width:100%;margin:0 auto;background:var(--black-2);border:1px solid #2a4d80;border-radius:12px;padding:18px;display:flex;flex-direction:column;flex:1;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);" data-i18n="ct.scope_of_work">Scope of Work</div>
+      <button class="del" onclick="closeScopeExpandModal()">✕</button>
+    </div>
+    <div id="scope-modal-item-name" style="font-size:.75rem;color:var(--gray);margin-bottom:14px;"></div>
+    <textarea id="scope-modal-textarea" style="flex:1;width:100%;min-height:50vh;font-size:1rem;line-height:1.5;padding:14px;border-radius:10px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);resize:vertical;box-sizing:border-box;" placeholder="Describe aquí todo el alcance del trabajo con el detalle que necesites..."></textarea>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn" style="flex:1;" onclick="saveScopeExpandModal()" data-i18n="btn.guardar_y_cerrar">💾 Guardar y Cerrar</button>
+      <button class="btn btn-outline" onclick="closeScopeExpandModal()" data-i18n="btn.cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- PROJECT DETAIL MODAL -->
 <div id="pd-modal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(5,10,20,.85);padding:16px;overflow-y:auto;">
   <div style="max-width:480px;margin:0 auto;background:var(--black-2);border:1px solid #2a4d80;border-radius:12px;padding:16px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
       <div id="pd-title" style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--white);"></div>
-      <button class="del" onclick="closeProjectDetail()">✕</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm btn-outline" onclick="togglePdEdit()" id="pd-edit-btn">✏️</button>
+        <button class="del" onclick="closeProjectDetail()">✕</button>
+      </div>
     </div>
     <div id="pd-subtitle" style="font-size:.68rem;color:var(--gray);margin-bottom:12px;"></div>
+    <div id="pd-edit-form" style="display:none;background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:12px;margin-bottom:14px;">
+      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.nombre_proyecto">Nombre del Proyecto</div><input type="text" id="pd-e-nombre"></div>
+      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="pd-e-cliente"></div>
+      <div class="fg"><div><div class="fl" data-i18n="fld.valor_cotizado">Valor Cotizado $</div><input type="number" id="pd-e-valor" min="0" step="0.01"></div><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="pd-e-estado"><option value="Activo" data-i18n="opt.activo">Activo</option><option value="Completado" data-i18n="opt.completado">Completado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div></div>
+      <div class="fg"><div><div class="fl" data-i18n="fld.fecha_inicio">Fecha Inicio</div><input type="date" id="pd-e-inicio"></div><div><div class="fl" data-i18n="fld.fecha_fin">Fecha Fin</div><input type="date" id="pd-e-fin"></div></div>
+      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.ubicacion">Ubicación</div><input type="text" id="pd-e-loc"></div>
+      <div style="margin-bottom:10px;"><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="pd-e-notas"></div>
+      <div id="pd-e-pedro-wrap" style="display:none;margin-bottom:10px;"><div class="fl">Pedro %</div><input type="number" id="pd-e-pedropct" min="0" max="100" step="1"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" style="flex:1;" onclick="savePdEdit()" data-i18n="btn.guardar_cambios">💾 Guardar Cambios</button>
+        <button class="btn btn-sm btn-outline" onclick="togglePdEdit()" data-i18n="btn.cancelar">Cancelar</button>
+      </div>
+    </div>
     <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px;">
       <div class="sc"><div class="sv r" id="pd-gastos-tot">$0</div><div class="sl2" data-i18n="ct.gastos_tot">Gastos</div></div>
       <div class="sc"><div class="sv r" id="pd-nomina-tot">$0</div><div class="sl2" data-i18n="ct.nomina_tot">Nómina</div></div>
@@ -365,8 +397,19 @@ select option{background:var(--black-3);}
 <div class="section" id="facturas">
   <h1 class="page-title" data-i18n="title.facturacion">Facturación</h1>
   <p class="page-sub" data-i18n="sub.facturacion">Generar y enviar facturas</p>
+
+  <div class="card">
+    <div class="card-title" data-i18n="ct.direcciones_guardadas">📍 Direcciones de Facturación Guardadas</div>
+    <p style="font-size:.65rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.direcciones_desc">Guarda aquí clientes/locaciones que facturas seguido. Luego, al hacer una factura nueva, solo eliges cuál y se llena solo.</p>
+    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_cliente_loc">Nombre (cliente / edificio)</div><input type="text" id="loc-fact-nombre" placeholder="Sunset Towers Condo Assoc"></div><div><div class="fl" data-i18n="fld.telefono">Teléfono</div><input type="text" id="loc-fact-tel" placeholder="(305) 555-1234"></div></div>
+    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.direccion">Dirección</div><input type="text" id="loc-fact-dir" placeholder="123 Main St, Sunny Isles Beach, FL 33160"></div>
+    <button class="btn btn-sm" style="width:100%;margin-bottom:10px;" onclick="addLocacionFacturacion()" data-i18n="btn.guardar_direccion">+ Guardar Dirección</button>
+    <div id="loc-fact-list" style="font-size:.75rem;"></div>
+  </div>
+
   <div class="card">
     <div class="card-title" data-i18n="ct.nueva_factura">Nueva Factura</div>
+    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.usar_direccion_guardada">Usar dirección guardada (opcional)</div><select id="f-loc-select" onchange="applyLocacionToInvoice()"><option value="">— Escribir manualmente —</option></select></div>
     <div class="fg"><div><div class="fl" data-i18n="fld.factura"># Factura</div><input type="text" id="f-num" placeholder="1070" onchange="onInvoiceNumChange()"></div><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="f-fec"></div></div>
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.bill_to">Bill To</div><input type="text" id="f-bill" list="f-bill-list" placeholder="Acqualina Management LLC" onfocus="populateBillToDatalist()"></div>
     <datalist id="f-bill-list"></datalist>
@@ -487,7 +530,7 @@ select option{background:var(--black-3);}
 
 <script>
 // ===== STATE =====
-let S = { proyectos:[], gastos:[], nomina:[], cobros:[], abonos:[], facturas:[] };
+let S = { proyectos:[], gastos:[], nomina:[], cobros:[], abonos:[], facturas:[], locacionesFacturacion:[] };
 let selectedInvoices = new Set();
 
 // ===== HELPERS =====
@@ -637,7 +680,7 @@ async function loadData() {
     const res = await fetch('/api/data');
     if (res.ok) {
       const d = await res.json();
-      if (d.proyectos) S = { proyectos:d.proyectos||[], gastos:d.gastos||[], nomina:d.nomina||[], cobros:d.cobros||[], abonos:d.abonos||[], facturas:d.facturas||[] };
+      if (d.proyectos) S = { proyectos:d.proyectos||[], gastos:d.gastos||[], nomina:d.nomina||[], cobros:d.cobros||[], abonos:d.abonos||[], facturas:d.facturas||[], locacionesFacturacion:d.locacionesFacturacion||[] };
       window._serverSeeded = !!d._seeded;
     }
   } catch(e) { console.log('Load error:', e); }
@@ -682,6 +725,58 @@ function openProjectDetailByNum(num) {
 function closeProjectDetail() {
   document.getElementById('pd-modal').style.display = 'none';
   PD_CURRENT_NUM = null;
+  renderAll();
+}
+
+function togglePdEdit() {
+  const form = document.getElementById('pd-edit-form');
+  const isOpening = form.style.display === 'none';
+  if (isOpening) {
+    const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM);
+    if (!p) return;
+    document.getElementById('pd-e-nombre').value = p.nombre || '';
+    document.getElementById('pd-e-cliente').value = p.cliente || '';
+    document.getElementById('pd-e-valor').value = p.valor || 0;
+    document.getElementById('pd-e-estado').value = p.estado || 'Activo';
+    document.getElementById('pd-e-inicio').value = p.inicio || '';
+    document.getElementById('pd-e-fin').value = p.fin || '';
+    document.getElementById('pd-e-loc').value = p.loc || '';
+    document.getElementById('pd-e-notas').value = p.notas || '';
+    const pedroWrap = document.getElementById('pd-e-pedro-wrap');
+    if ((p.empresa||'BH Pro') === 'Kratos') {
+      pedroWrap.style.display = 'block';
+      document.getElementById('pd-e-pedropct').value = p.pedroPct || 0;
+    } else {
+      pedroWrap.style.display = 'none';
+    }
+    form.style.display = 'block';
+  } else {
+    form.style.display = 'none';
+  }
+}
+
+function savePdEdit() {
+  const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM);
+  if (!p) return;
+  const newNombre = document.getElementById('pd-e-nombre').value.trim();
+  const newValor = parseFloat(document.getElementById('pd-e-valor').value) || 0;
+  if (!newNombre) return alert('El nombre del proyecto no puede quedar vacío');
+  p.nombre = newNombre;
+  p.cliente = document.getElementById('pd-e-cliente').value.trim();
+  p.valor = newValor;
+  p.estado = document.getElementById('pd-e-estado').value;
+  p.inicio = document.getElementById('pd-e-inicio').value;
+  p.fin = document.getElementById('pd-e-fin').value;
+  p.loc = document.getElementById('pd-e-loc').value.trim();
+  p.notas = document.getElementById('pd-e-notas').value.trim();
+  if ((p.empresa||'BH Pro') === 'Kratos') {
+    p.pedroPct = parseFloat(document.getElementById('pd-e-pedropct').value) || 0;
+  }
+  saveData();
+  document.getElementById('pd-edit-form').style.display = 'none';
+  document.getElementById('pd-title').textContent = `#${p.num} — ${p.nombre}`;
+  document.getElementById('pd-subtitle').textContent = `${p.cliente||''} · ${fmt(p.valor)}`;
+  renderProjectDetail();
   renderAll();
 }
 
@@ -1001,39 +1096,47 @@ async function sendInvoiceEmail() {
   const subject = document.getElementById('em-sub').value.trim();
   const message = document.getElementById('em-msg').value.trim();
   if(!to) return alert('Ingresa el email del destinatario');
-  document.getElementById('em-status').textContent = 'Enviando...';
+  document.getElementById('em-status').textContent = 'Enviando... (puede tardar hasta 20 seg)';
   document.getElementById('em-status').style.color = '#7A90B0';
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
     const res = await fetch('/api/invoice/email', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ invoiceId: currentEmailInvId, invoice: inv, to, cc, subject, message })
+      body: JSON.stringify({ invoiceId: currentEmailInvId, invoice: inv, to, cc, subject, message }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const data = await res.json();
     if(data.success) {
       inv.sent = true;
       inv.sentTo = to;
       inv.sentAt = new Date().toISOString();
       saveData(); renderAll();
-      document.getElementById('em-status').textContent = '✓ Enviado a ' + to;
+      document.getElementById('em-status').textContent = '✓ Enviado a ' + to + ' con el PDF adjunto';
       document.getElementById('em-status').style.color = '#2ECC8A';
-      setTimeout(closeEmailModal, 2000);
+      setTimeout(closeEmailModal, 2500);
     } else {
-      // Fallback: open mailto
+      // The automatic send failed server-side. Falling back to mailto opens the device's own
+      // mail app, but mailto links can NEVER carry attachments — that's a browser/OS limitation,
+      // not something fixable in code. Make this failure loud and clear instead of hiding it.
+      console.error('Email send failed:', data.message);
+      document.getElementById('em-status').innerHTML = `❌ Falló el envío automático (${data.message || 'error desconocido'}).<br>Se va a abrir tu app de correo, pero SIN el PDF adjunto — tendrás que descargarlo y adjuntarlo tú mismo.`;
+      document.getElementById('em-status').style.color = '#E74C3C';
       const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-      window.open(mailtoLink);
-      document.getElementById('em-status').textContent = '→ Abriendo Outlook...';
-      document.getElementById('em-status').style.color = '#4A9CAF';
-      setTimeout(closeEmailModal, 2000);
+      setTimeout(() => window.open(mailtoLink), 1500);
     }
   } catch(e) {
-    // Fallback mailto
+    // Fallback mailto — but say WHY, instead of silently opening Mail with no explanation
     const to2 = document.getElementById('em-to').value;
     const sub = document.getElementById('em-sub').value;
     const msg = document.getElementById('em-msg').value;
-    window.open(`mailto:${to2}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(msg)}`);
-    document.getElementById('em-status').textContent = '→ Abriendo Outlook...';
-    setTimeout(closeEmailModal, 1500);
+    const reason = e.name === 'AbortError' ? 'se tardó más de 25 segundos en responder' : (e.message || 'error de conexión');
+    console.error('Email send exception:', e);
+    document.getElementById('em-status').innerHTML = `❌ No se pudo enviar automáticamente (${reason}).<br>Se va a abrir tu app de correo, pero SIN el PDF adjunto — tendrás que descargarlo y adjuntarlo tú mismo.`;
+    document.getElementById('em-status').style.color = '#E74C3C';
+    setTimeout(() => window.open(`mailto:${to2}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(msg)}`), 1500);
   }
 }
 
@@ -1162,8 +1265,57 @@ function populateItemDatalist() {
   dl.innerHTML = nombres.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
 
+// ===== BILLING LOCATIONS (saved client addresses for invoices) =====
+function addLocacionFacturacion() {
+  const nombre = document.getElementById('loc-fact-nombre').value.trim();
+  const tel = document.getElementById('loc-fact-tel').value.trim();
+  const dir = document.getElementById('loc-fact-dir').value.trim();
+  if (!nombre) return alert(tt('Ingresa al menos el nombre','Enter at least the name'));
+  S.locacionesFacturacion.push({ id: gid(), nombre, telefono: tel, direccion: dir, empresa: ACTIVE_COMPANY });
+  saveData();
+  ['loc-fact-nombre','loc-fact-tel','loc-fact-dir'].forEach(id => document.getElementById(id).value = '');
+  renderLocFactList();
+  populateLocFactSelect();
+}
+
+function delLocacionFacturacion(id) {
+  S.locacionesFacturacion = S.locacionesFacturacion.filter(l => l.id !== id);
+  saveData();
+  renderLocFactList();
+  populateLocFactSelect();
+}
+
+function renderLocFactList() {
+  const box = document.getElementById('loc-fact-list');
+  if (!box) return;
+  const locs = S.locacionesFacturacion.filter(l => (l.empresa||'BH Pro') === ACTIVE_COMPANY);
+  if (!locs.length) { box.innerHTML = `<span style="color:var(--gray);">${tt('Sin direcciones guardadas todavía.','No saved addresses yet.')}</span>`; return; }
+  box.innerHTML = locs.map(l => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #222;">
+      <div><div style="color:var(--white);">${l.nombre}</div><div style="color:var(--gray);font-size:.65rem;">${l.direccion||''}${l.direccion&&l.telefono?' · ':''}${l.telefono||''}</div></div>
+      <button class="del" onclick="delLocacionFacturacion('${l.id}')">✕</button>
+    </div>`).join('');
+}
+
+function populateLocFactSelect() {
+  const sel = document.getElementById('f-loc-select');
+  if (!sel) return;
+  const locs = S.locacionesFacturacion.filter(l => (l.empresa||'BH Pro') === ACTIVE_COMPANY);
+  sel.innerHTML = `<option value="">${tt('— Escribir manualmente —','— Type manually —')}</option>` +
+    locs.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+}
+
+function applyLocacionToInvoice() {
+  const sel = document.getElementById('f-loc-select');
+  const loc = S.locacionesFacturacion.find(l => l.id === sel.value);
+  if (!loc) return;
+  document.getElementById('f-bill').value = loc.nombre;
+  window._currentInvoiceLocAddress = loc.direccion || '';
+  window._currentInvoiceLocPhone = loc.telefono || '';
+}
+
 // ===== I18N =====
-const I18N = {"tab.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "tab.proyectos": {"es": "Proyectos", "en": "Projects"}, "tab.locaciones": {"es": "Locaciones", "en": "Locations"}, "tab.gastos": {"es": "Gastos", "en": "Expenses"}, "tab.nomina": {"es": "Nómina", "en": "Payroll"}, "tab.cobros": {"es": "Cobros", "en": "Collections"}, "tab.facturas": {"es": "Facturas", "en": "Invoices"}, "tab.banco": {"es": "Banco", "en": "Bank"}, "tab.arlene": {"es": "Arlene", "en": "Arlene"}, "tab.mensual": {"es": "Mensual", "en": "Monthly"}, "title.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "title.proyectos": {"es": "Proyectos", "en": "Projects"}, "sub.proyectos": {"es": "Registro y control", "en": "Tracking and control"}, "title.locaciones": {"es": "Locaciones", "en": "Locations"}, "sub.locaciones": {"es": "Proyectos agrupados por edificio/locación", "en": "Projects grouped by building/location"}, "title.gastos": {"es": "Gastos", "en": "Expenses"}, "sub.gastos": {"es": "Materiales, herramientas, renta", "en": "Materials, tools, rent"}, "title.nomina": {"es": "Nómina", "en": "Payroll"}, "sub.nomina": {"es": "Pagos a empleados", "en": "Employee payments"}, "title.cobros": {"es": "Cobros", "en": "Collections"}, "sub.cobros": {"es": "Facturas y pagos del hotel", "en": "Invoices and payments"}, "title.facturacion": {"es": "Facturación", "en": "Invoicing"}, "sub.facturacion": {"es": "Generar y enviar facturas", "en": "Generate and send invoices"}, "title.banco": {"es": "Banco", "en": "Bank"}, "sub.banco": {"es": "Bank of America · Conectado via Plaid", "en": "Bank of America · Connected via Plaid"}, "title.arlene": {"es": "Cuenta de Arlene", "en": "Arlene's Account"}, "sub.arlene": {"es": "Control de pagos y saldo", "en": "Payment and balance tracking"}, "title.mensual": {"es": "Resumen Mensual", "en": "Monthly Summary"}, "sub.mensual": {"es": "Por mes automático", "en": "Automatic monthly"}, "lbl.ya_cobrado": {"es": "Ya Cobrado", "en": "Collected"}, "lbl.por_cobrar": {"es": "Por Cobrar", "en": "Outstanding"}, "lbl.gastosn_mina": {"es": "Gastos+Nómina", "en": "Expenses+Payroll"}, "lbl.ganancia_bruta": {"es": "Ganancia Bruta", "en": "Gross Profit"}, "lbl.tu_parte_55": {"es": "Tu Parte 50%", "en": "Your Share 50%"}, "lbl.arlene_45": {"es": "Arlene 50%", "en": "Arlene 50%"}, "lbl.falta_arlene": {"es": "Falta Arlene", "en": "Owed to Arlene"}, "lbl.arlene": {"es": "Arlene", "en": "Arlene"}, "lbl.le_toca": {"es": "Le Toca", "en": "Owed"}, "lbl.pagado": {"es": "Pagado", "en": "Paid"}, "lbl.falta": {"es": "Falta", "en": "Remaining"}, "lbl.proyectos": {"es": "Proyectos", "en": "Projects"}, "lbl.total": {"es": "Total", "en": "Total"}, "lbl.completados": {"es": "Completados", "en": "Completed"}, "lbl.activos": {"es": "Activos", "en": "Active"}, "lbl.pendientes": {"es": "Pendientes", "en": "Pending"}, "lbl.lista_de_proyectos": {"es": "Lista de Proyectos", "en": "Project List"}, "lbl.registro": {"es": "Registro", "en": "Log"}, "lbl.registro_de_n_mina": {"es": "Registro de Nómina", "en": "Payroll Log"}, "lbl.por_empleado": {"es": "Por Empleado", "en": "By Employee"}, "lbl.cobrado": {"es": "Cobrado", "en": "Collected"}, "lbl.pendiente": {"es": "Pendiente", "en": "Pending"}, "lbl.total_facturado": {"es": "Total Facturado", "en": "Total Invoiced"}, "lbl.facturas_guardadas": {"es": "Facturas Guardadas", "en": "Saved Invoices"}, "lbl.transacciones_recientes": {"es": "Transacciones Recientes", "en": "Recent Transactions"}, "lbl.le_toca_45": {"es": "Le Toca (50%)", "en": "Owed (50%)"}, "lbl.ya_pagado": {"es": "Ya Pagado", "en": "Already Paid"}, "lbl.falta_pagar": {"es": "Falta Pagar", "en": "Still Owed"}, "lbl.historial": {"es": "Historial", "en": "History"}, "lbl.reporte_anual": {"es": "Reporte Anual", "en": "Annual Report"}, "lbl.pct_pagado": {"es": "% Pagado", "en": "% Paid"}, "fld.proyecto": {"es": "# Proyecto", "en": "Project #"}, "fld.cliente": {"es": "Cliente", "en": "Client"}, "fld.nombre_del_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.locacion": {"es": "Locación", "en": "Location"}, "fld.comision_pedro": {"es": "% Comisión Pedro", "en": "% Pedro Commission"}, "fld.fecha_inicio": {"es": "Fecha Inicio", "en": "Start Date"}, "fld.fecha_fin": {"es": "Fecha Fin", "en": "End Date"}, "fld.valor_cotizado": {"es": "Valor Cotizado $", "en": "Quoted Value $"}, "fld.estado": {"es": "Estado", "en": "Status"}, "fld.notas": {"es": "Notas", "en": "Notes"}, "fld.fecha": {"es": "Fecha", "en": "Date"}, "fld.categoria": {"es": "Categoría", "en": "Category"}, "fld.monto": {"es": "Monto $", "en": "Amount $"}, "fld.descripcion": {"es": "Descripción", "en": "Description"}, "fld.recibo": {"es": "Recibo", "en": "Receipt"}, "fld.foto_del_recibogasto_opcional": {"es": "Foto del recibo/gasto (opcional)", "en": "Receipt/expense photo (optional)"}, "fld.empleado": {"es": "Empleado", "en": "Employee"}, "fld.total_pagado": {"es": "Total Pagado $", "en": "Total Paid $"}, "fld.horasdias": {"es": "Horas/Días", "en": "Hours/Days"}, "fld.tarifa": {"es": "Tarifa $", "en": "Rate $"}, "fld.facturaproyecto": {"es": "# Factura/Proyecto", "en": "Invoice/Project #"}, "fld.tipo_pago": {"es": "Tipo Pago", "en": "Payment Type"}, "fld.chequewire": {"es": "# Cheque/Wire", "en": "# Check/Wire"}, "fld.fecha_pago": {"es": "Fecha Pago", "en": "Payment Date"}, "fld.factura": {"es": "# Factura", "en": "Invoice #"}, "fld.bill_to": {"es": "Bill To", "en": "Bill To"}, "fld.nota_opcional": {"es": "Nota (opcional)", "en": "Note (optional)"}, "fld.para_email": {"es": "Para (email)", "en": "To (email)"}, "fld.cc_opcional": {"es": "CC (opcional)", "en": "CC (optional)"}, "fld.asunto": {"es": "Asunto", "en": "Subject"}, "fld.mensaje": {"es": "Mensaje", "en": "Message"}, "ct.agregar_proyecto": {"es": "Agregar Proyecto", "en": "Add Project"}, "ct.registrar_gasto": {"es": "Registrar Gasto", "en": "Log Expense"}, "ct.registrar_pago": {"es": "Registrar Pago", "en": "Log Payroll"}, "ct.registrar_factura": {"es": "Registrar Factura", "en": "Save Invoice"}, "ct.nueva_factura": {"es": "Nueva Factura", "en": "New Invoice"}, "ct.acceso_de_arlene_a_la_app": {"es": "Acceso de Arlene a la app", "en": "Arlene's Access to the App"}, "ct.registrar_abono": {"es": "Registrar Abono", "en": "Log Payment"}, "ct.reporte_para_taxes_contador": {"es": "Reporte para Taxes / Contador", "en": "Report for Taxes / Accountant"}, "btn.cancelar": {"es": "Cancelar", "en": "Cancel"}, "btn.cargando": {"es": "Cargando...", "en": "Loading..."}, "btn.conectar_bofa": {"es": "Conectar Bank of America", "en": "Connect Bank of America"}, "btn.enter": {"es": "Enter", "en": "Enter"}, "btn.enviar_email": {"es": "✉ Enviar por Email", "en": "✉ Send by Email"}, "btn.descargar_pdf": {"es": "⬇ Descargar PDF", "en": "⬇ Download PDF"}, "btn.exportar_excel": {"es": "⬇ Exportar a Excel", "en": "⬇ Export to Excel"}, "btn.guardar": {"es": "💾 Guardar", "en": "💾 Save"}, "btn.enviar": {"es": "📨 Enviar", "en": "📨 Send"}, "btn.agregar_item": {"es": "+ Agregar Ítem", "en": "+ Add Item"}, "btn.registrar_abono": {"es": "+ Registrar Abono", "en": "+ Log Payment"}, "btn.registrar_gasto": {"es": "+ Registrar Gasto", "en": "+ Log Expense"}, "btn.registrar_pago": {"es": "+ Registrar Pago", "en": "+ Log Payroll"}, "btn.registrar": {"es": "+ Registrar", "en": "+ Save"}, "ct.cuenta_arlene": {"es": "💜 Cuenta de Arlene", "en": "💜 Arlene's Account"}, "th.nombre": {"es": "Nombre", "en": "Name"}, "th.valor": {"es": "Valor", "en": "Value"}, "th.ganancia": {"es": "Ganancia", "en": "Profit"}, "th.cerrado": {"es": "Cerrado", "en": "Closed"}, "th.factura": {"es": "Factura", "en": "Invoice"}, "th.monto": {"es": "Monto", "en": "Amount"}, "th.tipo": {"es": "Tipo", "en": "Type"}, "th.cheque": {"es": "#Cheque", "en": "#Check"}, "ct.gastos_tot": {"es": "Gastos", "en": "Expenses"}, "ct.nomina_tot": {"es": "Nómina", "en": "Payroll"}, "ct.ganancia_pd": {"es": "Ganancia", "en": "Profit"}, "sl.agregar_gasto": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "sl.agregar_nomina": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "btn.agregar_gasto_pd": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "btn.agregar_nomina_pd": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "chat.greeting": {"es": "Hola! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?", "en": "Hi! I'm your BH Pro Services assistant. I can analyze your numbers, calculate profits, or answer any question about the business. How can I help?"}, "btn.agregar_proyecto_submit": {"es": "+ Agregar Proyecto", "en": "+ Add Project"}, "btn.reemplazar_datos": {"es": "⚠️ Reemplazar todo con los datos horneados", "en": "⚠️ Replace everything with the baked-in data"}, "ct.importar_excel": {"es": "📥 Importar/Actualizar desde Excel", "en": "📥 Import/Update from Excel"}, "ct.datos_referencia": {"es": "📦 Datos de referencia (11 ago 2026)", "en": "📦 Reference data (Aug 11, 2026)"}, "p.excel_import_desc": {"es": "Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.", "en": "Upload your projects Excel file. Recognized columns: num, nombre, cliente, valor, estado, notas, loc (case and order don't matter). If the project # already exists, it updates; if not, it's added."}, "p.datos_referencia_desc": {"es": "La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.", "en": "The app has your 121 projects, 49 expenses, 254 payroll records, 121 collections, and 7 payments to Arlene baked in (from the Excel you uploaded). Since your server already has saved data, they don't load on their own — use this button to replace EVERYTHING currently there with that reference data."}, "opt.activo": {"es": "Activo", "en": "Active"}, "opt.completado": {"es": "Completado", "en": "Completed"}, "opt.pendiente": {"es": "Pendiente", "en": "Pending"}, "fld.items_factura": {"es": "Ítems de la factura", "en": "Invoice items"}};
+const I18N = {"tab.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "tab.proyectos": {"es": "Proyectos", "en": "Projects"}, "tab.locaciones": {"es": "Locaciones", "en": "Locations"}, "tab.gastos": {"es": "Gastos", "en": "Expenses"}, "tab.nomina": {"es": "Nómina", "en": "Payroll"}, "tab.cobros": {"es": "Cobros", "en": "Collections"}, "tab.facturas": {"es": "Facturas", "en": "Invoices"}, "tab.banco": {"es": "Banco", "en": "Bank"}, "tab.arlene": {"es": "Arlene", "en": "Arlene"}, "tab.mensual": {"es": "Mensual", "en": "Monthly"}, "title.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "title.proyectos": {"es": "Proyectos", "en": "Projects"}, "sub.proyectos": {"es": "Registro y control", "en": "Tracking and control"}, "title.locaciones": {"es": "Locaciones", "en": "Locations"}, "sub.locaciones": {"es": "Proyectos agrupados por edificio/locación", "en": "Projects grouped by building/location"}, "title.gastos": {"es": "Gastos", "en": "Expenses"}, "sub.gastos": {"es": "Materiales, herramientas, renta", "en": "Materials, tools, rent"}, "title.nomina": {"es": "Nómina", "en": "Payroll"}, "sub.nomina": {"es": "Pagos a empleados", "en": "Employee payments"}, "title.cobros": {"es": "Cobros", "en": "Collections"}, "sub.cobros": {"es": "Facturas y pagos del hotel", "en": "Invoices and payments"}, "title.facturacion": {"es": "Facturación", "en": "Invoicing"}, "sub.facturacion": {"es": "Generar y enviar facturas", "en": "Generate and send invoices"}, "title.banco": {"es": "Banco", "en": "Bank"}, "sub.banco": {"es": "Bank of America · Conectado via Plaid", "en": "Bank of America · Connected via Plaid"}, "title.arlene": {"es": "Cuenta de Arlene", "en": "Arlene's Account"}, "sub.arlene": {"es": "Control de pagos y saldo", "en": "Payment and balance tracking"}, "title.mensual": {"es": "Resumen Mensual", "en": "Monthly Summary"}, "sub.mensual": {"es": "Por mes automático", "en": "Automatic monthly"}, "lbl.ya_cobrado": {"es": "Ya Cobrado", "en": "Collected"}, "lbl.por_cobrar": {"es": "Por Cobrar", "en": "Outstanding"}, "lbl.gastosn_mina": {"es": "Gastos+Nómina", "en": "Expenses+Payroll"}, "lbl.ganancia_bruta": {"es": "Ganancia Bruta", "en": "Gross Profit"}, "lbl.tu_parte_55": {"es": "Tu Parte 50%", "en": "Your Share 50%"}, "lbl.arlene_45": {"es": "Arlene 50%", "en": "Arlene 50%"}, "lbl.falta_arlene": {"es": "Falta Arlene", "en": "Owed to Arlene"}, "lbl.arlene": {"es": "Arlene", "en": "Arlene"}, "lbl.le_toca": {"es": "Le Toca", "en": "Owed"}, "lbl.pagado": {"es": "Pagado", "en": "Paid"}, "lbl.falta": {"es": "Falta", "en": "Remaining"}, "lbl.proyectos": {"es": "Proyectos", "en": "Projects"}, "lbl.total": {"es": "Total", "en": "Total"}, "lbl.completados": {"es": "Completados", "en": "Completed"}, "lbl.activos": {"es": "Activos", "en": "Active"}, "lbl.pendientes": {"es": "Pendientes", "en": "Pending"}, "lbl.lista_de_proyectos": {"es": "Lista de Proyectos", "en": "Project List"}, "lbl.registro": {"es": "Registro", "en": "Log"}, "lbl.registro_de_n_mina": {"es": "Registro de Nómina", "en": "Payroll Log"}, "lbl.por_empleado": {"es": "Por Empleado", "en": "By Employee"}, "lbl.cobrado": {"es": "Cobrado", "en": "Collected"}, "lbl.pendiente": {"es": "Pendiente", "en": "Pending"}, "lbl.total_facturado": {"es": "Total Facturado", "en": "Total Invoiced"}, "lbl.facturas_guardadas": {"es": "Facturas Guardadas", "en": "Saved Invoices"}, "lbl.transacciones_recientes": {"es": "Transacciones Recientes", "en": "Recent Transactions"}, "lbl.le_toca_45": {"es": "Le Toca (50%)", "en": "Owed (50%)"}, "lbl.ya_pagado": {"es": "Ya Pagado", "en": "Already Paid"}, "lbl.falta_pagar": {"es": "Falta Pagar", "en": "Still Owed"}, "lbl.historial": {"es": "Historial", "en": "History"}, "lbl.reporte_anual": {"es": "Reporte Anual", "en": "Annual Report"}, "lbl.pct_pagado": {"es": "% Pagado", "en": "% Paid"}, "fld.proyecto": {"es": "# Proyecto", "en": "Project #"}, "fld.cliente": {"es": "Cliente", "en": "Client"}, "fld.nombre_del_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.locacion": {"es": "Locación", "en": "Location"}, "fld.comision_pedro": {"es": "% Comisión Pedro", "en": "% Pedro Commission"}, "fld.fecha_inicio": {"es": "Fecha Inicio", "en": "Start Date"}, "fld.fecha_fin": {"es": "Fecha Fin", "en": "End Date"}, "fld.valor_cotizado": {"es": "Valor Cotizado $", "en": "Quoted Value $"}, "fld.estado": {"es": "Estado", "en": "Status"}, "fld.notas": {"es": "Notas", "en": "Notes"}, "fld.fecha": {"es": "Fecha", "en": "Date"}, "fld.categoria": {"es": "Categoría", "en": "Category"}, "fld.monto": {"es": "Monto $", "en": "Amount $"}, "fld.descripcion": {"es": "Descripción", "en": "Description"}, "fld.recibo": {"es": "Recibo", "en": "Receipt"}, "fld.foto_del_recibogasto_opcional": {"es": "Foto del recibo/gasto (opcional)", "en": "Receipt/expense photo (optional)"}, "fld.empleado": {"es": "Empleado", "en": "Employee"}, "fld.total_pagado": {"es": "Total Pagado $", "en": "Total Paid $"}, "fld.horasdias": {"es": "Horas/Días", "en": "Hours/Days"}, "fld.tarifa": {"es": "Tarifa $", "en": "Rate $"}, "fld.facturaproyecto": {"es": "# Factura/Proyecto", "en": "Invoice/Project #"}, "fld.tipo_pago": {"es": "Tipo Pago", "en": "Payment Type"}, "fld.chequewire": {"es": "# Cheque/Wire", "en": "# Check/Wire"}, "fld.fecha_pago": {"es": "Fecha Pago", "en": "Payment Date"}, "fld.factura": {"es": "# Factura", "en": "Invoice #"}, "fld.bill_to": {"es": "Bill To", "en": "Bill To"}, "fld.nota_opcional": {"es": "Nota (opcional)", "en": "Note (optional)"}, "fld.para_email": {"es": "Para (email)", "en": "To (email)"}, "fld.cc_opcional": {"es": "CC (opcional)", "en": "CC (optional)"}, "fld.asunto": {"es": "Asunto", "en": "Subject"}, "fld.mensaje": {"es": "Mensaje", "en": "Message"}, "ct.agregar_proyecto": {"es": "Agregar Proyecto", "en": "Add Project"}, "ct.registrar_gasto": {"es": "Registrar Gasto", "en": "Log Expense"}, "ct.registrar_pago": {"es": "Registrar Pago", "en": "Log Payroll"}, "ct.registrar_factura": {"es": "Registrar Factura", "en": "Save Invoice"}, "ct.nueva_factura": {"es": "Nueva Factura", "en": "New Invoice"}, "ct.acceso_de_arlene_a_la_app": {"es": "Acceso de Arlene a la app", "en": "Arlene's Access to the App"}, "ct.registrar_abono": {"es": "Registrar Abono", "en": "Log Payment"}, "ct.reporte_para_taxes_contador": {"es": "Reporte para Taxes / Contador", "en": "Report for Taxes / Accountant"}, "btn.cancelar": {"es": "Cancelar", "en": "Cancel"}, "btn.cargando": {"es": "Cargando...", "en": "Loading..."}, "btn.conectar_bofa": {"es": "Conectar Bank of America", "en": "Connect Bank of America"}, "btn.enter": {"es": "Enter", "en": "Enter"}, "btn.enviar_email": {"es": "✉ Enviar por Email", "en": "✉ Send by Email"}, "btn.descargar_pdf": {"es": "⬇ Descargar PDF", "en": "⬇ Download PDF"}, "btn.exportar_excel": {"es": "⬇ Exportar a Excel", "en": "⬇ Export to Excel"}, "btn.guardar": {"es": "💾 Guardar", "en": "💾 Save"}, "btn.enviar": {"es": "📨 Enviar", "en": "📨 Send"}, "btn.agregar_item": {"es": "+ Agregar Ítem", "en": "+ Add Item"}, "btn.registrar_abono": {"es": "+ Registrar Abono", "en": "+ Log Payment"}, "btn.registrar_gasto": {"es": "+ Registrar Gasto", "en": "+ Log Expense"}, "btn.registrar_pago": {"es": "+ Registrar Pago", "en": "+ Log Payroll"}, "btn.registrar": {"es": "+ Registrar", "en": "+ Save"}, "ct.cuenta_arlene": {"es": "💜 Cuenta de Arlene", "en": "💜 Arlene's Account"}, "th.nombre": {"es": "Nombre", "en": "Name"}, "th.valor": {"es": "Valor", "en": "Value"}, "th.ganancia": {"es": "Ganancia", "en": "Profit"}, "th.cerrado": {"es": "Cerrado", "en": "Closed"}, "th.factura": {"es": "Factura", "en": "Invoice"}, "th.monto": {"es": "Monto", "en": "Amount"}, "th.tipo": {"es": "Tipo", "en": "Type"}, "th.cheque": {"es": "#Cheque", "en": "#Check"}, "ct.gastos_tot": {"es": "Gastos", "en": "Expenses"}, "ct.nomina_tot": {"es": "Nómina", "en": "Payroll"}, "ct.ganancia_pd": {"es": "Ganancia", "en": "Profit"}, "sl.agregar_gasto": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "sl.agregar_nomina": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "btn.agregar_gasto_pd": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "btn.agregar_nomina_pd": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "chat.greeting": {"es": "Hola! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?", "en": "Hi! I'm your BH Pro Services assistant. I can analyze your numbers, calculate profits, or answer any question about the business. How can I help?"}, "btn.agregar_proyecto_submit": {"es": "+ Agregar Proyecto", "en": "+ Add Project"}, "btn.reemplazar_datos": {"es": "⚠️ Reemplazar todo con los datos horneados", "en": "⚠️ Replace everything with the baked-in data"}, "ct.importar_excel": {"es": "📥 Importar/Actualizar desde Excel", "en": "📥 Import/Update from Excel"}, "ct.datos_referencia": {"es": "📦 Datos de referencia (11 ago 2026)", "en": "📦 Reference data (Aug 11, 2026)"}, "p.excel_import_desc": {"es": "Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.", "en": "Upload your projects Excel file. Recognized columns: num, nombre, cliente, valor, estado, notas, loc (case and order don't matter). If the project # already exists, it updates; if not, it's added."}, "p.datos_referencia_desc": {"es": "La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.", "en": "The app has your 121 projects, 49 expenses, 254 payroll records, 121 collections, and 7 payments to Arlene baked in (from the Excel you uploaded). Since your server already has saved data, they don't load on their own — use this button to replace EVERYTHING currently there with that reference data."}, "opt.activo": {"es": "Activo", "en": "Active"}, "opt.completado": {"es": "Completado", "en": "Completed"}, "opt.pendiente": {"es": "Pendiente", "en": "Pending"}, "fld.items_factura": {"es": "Ítems de la factura", "en": "Invoice items"}, "fld.nombre_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.ubicacion": {"es": "Ubicación", "en": "Location"}, "btn.guardar_cambios": {"es": "💾 Guardar Cambios", "en": "💾 Save Changes"}, "ct.direcciones_guardadas": {"es": "📍 Direcciones de Facturación Guardadas", "en": "📍 Saved Billing Addresses"}, "p.direcciones_desc": {"es": "Guarda aquí clientes/locaciones que facturas seguido. Luego, al hacer una factura nueva, solo eliges cuál y se llena solo.", "en": "Save clients/locations you invoice often here. Then, when making a new invoice, just pick one and it fills in automatically."}, "fld.nombre_cliente_loc": {"es": "Nombre (cliente / edificio)", "en": "Name (client / building)"}, "fld.telefono": {"es": "Teléfono", "en": "Phone"}, "fld.direccion": {"es": "Dirección", "en": "Address"}, "btn.guardar_direccion": {"es": "+ Guardar Dirección", "en": "+ Save Address"}, "fld.usar_direccion_guardada": {"es": "Usar dirección guardada (opcional)", "en": "Use saved address (optional)"}, "ct.scope_of_work": {"es": "Alcance del Trabajo", "en": "Scope of Work"}, "btn.guardar_y_cerrar": {"es": "💾 Guardar y Cerrar", "en": "💾 Save and Close"}};
 let CURRENT_LANG = 'es';
 function tt(es, en) { return CURRENT_LANG === 'en' ? en : es; }
 
@@ -1202,11 +1354,14 @@ function toggleLanguage() {
 })();
 
 // ===== INVOICE ITEMS (dynamic rows) =====
+let II_ROW_COUNTER = 0;
 function addInvoiceItemRow(item) {
   item = item || {desc:'', detail:'', qty:1, rate:0};
   const wrap = document.getElementById('f-items');
   const row = document.createElement('div');
+  const rowId = 'iirow-' + (++II_ROW_COUNTER) + '-' + Date.now();
   row.className = 'inv-item-row';
+  row.dataset.rowid = rowId;
   row.style = 'border:1px solid #2a4d80;border-radius:10px;padding:12px;margin-bottom:10px;background:var(--black-3);';
   row.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -1215,7 +1370,10 @@ function addInvoiceItemRow(item) {
     </div>
     <div class="fl" style="font-size:.62rem;">${tt('Descripción del ítem','Item description')}</div>
     <textarea class="ii-desc" placeholder="${tt('Ej. Apartment Interior Painting','E.g. Apartment Interior Painting')}" rows="2" style="width:100%;font-size:1rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.desc||'')}</textarea>
-    <div class="fl" style="font-size:.62rem;">${tt('Detalle / lo que incluye (opcional)','Detail / what it includes (optional)')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="fl" style="font-size:.62rem;">${tt('Detalle / Scope of Work (opcional)','Detail / Scope of Work (optional)')}</div>
+      <button type="button" class="btn btn-sm btn-outline" style="font-size:.6rem;padding:3px 8px;margin-bottom:4px;" onclick="openScopeExpandModal('${rowId}')">⛶ ${tt('Ver grande','Expand')}</button>
+    </div>
     <textarea class="ii-detail" placeholder="${tt('Ej. Repintado de paredes, zócalos y puertas...','E.g. Repainting of interior walls, baseboards, and doors...')}" rows="3" style="width:100%;font-size:.85rem;padding:10px;border-radius:8px;background:var(--black-4);border:1px solid #2a4d80;color:var(--white);margin-bottom:10px;resize:vertical;box-sizing:border-box;">${(item.detail||'')}</textarea>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div><div class="fl" style="font-size:.62rem;">${tt('Cantidad','Quantity')}</div><input type="number" class="ii-qty" value="${item.qty||1}" min="0" step="1" oninput="updateInvoiceTotalPreview()" style="width:100%;box-sizing:border-box;"></div>
@@ -1223,6 +1381,29 @@ function addInvoiceItemRow(item) {
     </div>`;
   wrap.appendChild(row);
   updateInvoiceTotalPreview();
+}
+
+let SCOPE_EXPAND_ROWID = null;
+function openScopeExpandModal(rowId) {
+  const row = document.querySelector(`.inv-item-row[data-rowid="${rowId}"]`);
+  if (!row) return;
+  SCOPE_EXPAND_ROWID = rowId;
+  const desc = row.querySelector('.ii-desc').value;
+  const detail = row.querySelector('.ii-detail').value;
+  document.getElementById('scope-modal-item-name').textContent = desc || tt('(sin nombre de ítem todavía)','(item has no name yet)');
+  document.getElementById('scope-modal-textarea').value = detail;
+  document.getElementById('scope-expand-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('scope-modal-textarea').focus(), 100);
+}
+function closeScopeExpandModal() {
+  document.getElementById('scope-expand-modal').style.display = 'none';
+  SCOPE_EXPAND_ROWID = null;
+}
+function saveScopeExpandModal() {
+  if (!SCOPE_EXPAND_ROWID) return;
+  const row = document.querySelector(`.inv-item-row[data-rowid="${SCOPE_EXPAND_ROWID}"]`);
+  if (row) row.querySelector('.ii-detail').value = document.getElementById('scope-modal-textarea').value;
+  closeScopeExpandModal();
 }
 
 function collectInvoiceItems() {
@@ -1264,6 +1445,8 @@ function buildInvoiceFromForm() {
     dueDate:document.getElementById('f-fec').value||todayISO,
     billTo:document.getElementById('f-bill').value.trim(),
     shipTo:document.getElementById('f-bill').value.trim(),
+    billAddress: window._currentInvoiceLocAddress || '',
+    billPhone: window._currentInvoiceLocPhone || '',
     amount:total,
     items:items,
     item:document.getElementById('f-item').value.trim(),
@@ -1301,6 +1484,10 @@ function saveInvoice() {
   }
   saveData();
   ['f-num','f-item','f-note'].forEach(id=>document.getElementById(id).value='');
+  window._currentInvoiceLocAddress = '';
+  window._currentInvoiceLocPhone = '';
+  const locSel = document.getElementById('f-loc-select');
+  if (locSel) locSel.value = '';
   clearInvoiceItems();
   renderAll();
   // Show success with options
@@ -1551,7 +1738,7 @@ function confirmTxToCobro(txId) {
 }
 
 // ===== RENDER =====
-function renderAll() { renderDash(); renderProy(); renderGasto(); renderNomina(); renderCobro(); renderFacturas(); renderArlene(); renderMensual(); prefillNextInvoiceNumber(); renderLocaciones(); populateProjectSelect('g-pro', true); populateProjectSelect('n-pro'); togglePedroField(); }
+function renderAll() { renderDash(); renderProy(); renderGasto(); renderNomina(); renderCobro(); renderFacturas(); renderArlene(); renderMensual(); prefillNextInvoiceNumber(); renderLocaciones(); renderLocFactList(); populateLocFactSelect(); populateProjectSelect('g-pro', true); populateProjectSelect('n-pro'); togglePedroField(); }
 
 function renderLocaciones() {
   const wrap = document.getElementById('loc-list-view');
@@ -1662,7 +1849,7 @@ function renderProy() {
     const facturaExiste=S.facturas.find(f=>f.number===p.num && (f.empresa||'BH Pro')===ACTIVE_COMPANY);
     const hasFact=facturaExiste?'✓':'';
     const facturarBtn = facturaExiste ? '' : `<button class="btn btn-sm" style="background:#1B3A6B;font-size:.6rem;padding:3px 6px;" onclick="facturarProyecto('${p.num}')">📄 Facturar</button>`;
-    const detailBtn = `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:3px 6px;margin-left:4px;" onclick="openProjectDetail('${p.id}')">📋 Gastos/Nómina</button>`;
+    const detailBtn = `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:3px 6px;margin-left:4px;" onclick="openProjectDetail('${p.id}')">📋 ${tt('Ver / Editar','View / Edit')}</button>`;
     const yaPagado = S.cobros.some(cob=>cob.num===p.num && cob.estado==='Pagado');
     const cerrado = p.estado==='Completado' || yaPagado;
     const estadoBg = p.estado==='Completado'?'#0a2a1a':p.estado==='Activo'?'#0a1a2a':'#2a1a00';
