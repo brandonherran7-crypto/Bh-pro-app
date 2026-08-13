@@ -15,7 +15,7 @@ const PWD=process.env.APP_PASSWORD||'16720419Brh!',ARLENE_PWD=process.env.ARLENE
 // fresh deploy will reset to the seed data below. Recommended: add a Disk and set DATA_DIR=/data.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'bhpro-data.json');
-let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
+let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],deletedIds:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
 function loadFromDisk(){
   try{
     if(fs.existsSync(DATA_FILE)){
@@ -81,7 +81,17 @@ app.post('/api/logout',(q,r)=>{clearAuthCookie(r);r.json({success:true});});
 app.get('/api/auth-check',(q,r)=>{const role=verifyAuthCookie(q.headers.cookie);r.json({authenticated:!!role,role:role||null,arleneAccessEnabled:!!D.arlene_access_enabled});});
 app.post('/api/arlene-access',adminAuth,(q,r)=>{D.arlene_access_enabled=!!q.body.enabled;saveToDisk();r.json({success:true,enabled:D.arlene_access_enabled});});
 app.get('/api/data',auth,(q,r)=>r.json(D));
-app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k];});D._seeded=true;saveToDisk();r.json({success:true});});
+app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k].filter(item=>!D.deletedIds.includes(item.id));});D._seeded=true;saveToDisk();r.json({success:true});});
+app.post('/api/data/delete-item',auth,(q,r)=>{
+  const {key,id}=q.body;
+  const validKeys=['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion'];
+  if(!validKeys.includes(key)||!id)return r.status(400).json({success:false,message:'Invalid key or id'});
+  D[key]=D[key].filter(item=>item.id!==id);
+  if(!D.deletedIds.includes(id))D.deletedIds.push(id);
+  if(D.deletedIds.length>2000)D.deletedIds=D.deletedIds.slice(-2000); // keep tombstone list from growing forever
+  saveToDisk();
+  r.json({success:true});
+});
 app.post('/api/plaid/create-link-token',adminAuth,async(q,r)=>{try{const APP_URL=process.env.APP_URL||'https://bh-pro-app.onrender.com';console.log('[Plaid] create-link-token using PLAID_ENV=', ENV, 'redirect_uri=', APP_URL);const x=await pc.linkTokenCreate({user:{client_user_id:'bh'},client_name:'BH Pro Services',products:['transactions'],country_codes:['US'],language:'en',redirect_uri:APP_URL});r.json({link_token:x.data.link_token});}catch(e){console.error('[Plaid] create-link-token FAILED:', e.response?.data || e.message);r.status(500).json({error:e.response?.data?.error_message || e.message});}});
 app.post('/api/plaid/exchange-token',adminAuth,async(q,r)=>{try{console.log('[Plaid] exchange-token called for empresa:', q.body.empresa);const x=await pc.itemPublicTokenExchange({public_token:q.body.public_token});const empresa=q.body.empresa==='Kratos'?'Kratos':'BH Pro';if(empresa==='Kratos'){D.plaid_access_token_kratos=x.data.access_token;}else{D.plaid_access_token_bhpro=x.data.access_token;D.plaid_access_token=x.data.access_token;}saveToDisk();console.log('[Plaid] Token saved successfully for', empresa);r.json({success:true});}catch(e){console.error('[Plaid] exchange-token FAILED:', e.response?.data || e.message);r.status(500).json({error:e.response?.data?.error_message || e.message});}});
 app.get('/api/plaid/transactions',adminAuth,async(q,r)=>{
