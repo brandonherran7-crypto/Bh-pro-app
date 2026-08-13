@@ -15,7 +15,7 @@ const PWD=process.env.APP_PASSWORD||'16720419Brh!',ARLENE_PWD=process.env.ARLENE
 // fresh deploy will reset to the seed data below. Recommended: add a Disk and set DATA_DIR=/data.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'bhpro-data.json');
-let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
+let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
 function loadFromDisk(){
   try{
     if(fs.existsSync(DATA_FILE)){
@@ -81,7 +81,7 @@ app.post('/api/logout',(q,r)=>{clearAuthCookie(r);r.json({success:true});});
 app.get('/api/auth-check',(q,r)=>{const role=verifyAuthCookie(q.headers.cookie);r.json({authenticated:!!role,role:role||null,arleneAccessEnabled:!!D.arlene_access_enabled});});
 app.post('/api/arlene-access',adminAuth,(q,r)=>{D.arlene_access_enabled=!!q.body.enabled;saveToDisk();r.json({success:true,enabled:D.arlene_access_enabled});});
 app.get('/api/data',auth,(q,r)=>r.json(D));
-app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k];});D._seeded=true;saveToDisk();r.json({success:true});});
+app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k];});D._seeded=true;saveToDisk();r.json({success:true});});
 app.post('/api/plaid/create-link-token',adminAuth,async(q,r)=>{try{const APP_URL=process.env.APP_URL||'https://bh-pro-app.onrender.com';console.log('[Plaid] create-link-token using PLAID_ENV=', ENV, 'redirect_uri=', APP_URL);const x=await pc.linkTokenCreate({user:{client_user_id:'bh'},client_name:'BH Pro Services',products:['transactions'],country_codes:['US'],language:'en',redirect_uri:APP_URL});r.json({link_token:x.data.link_token});}catch(e){console.error('[Plaid] create-link-token FAILED:', e.response?.data || e.message);r.status(500).json({error:e.response?.data?.error_message || e.message});}});
 app.post('/api/plaid/exchange-token',adminAuth,async(q,r)=>{try{console.log('[Plaid] exchange-token called for empresa:', q.body.empresa);const x=await pc.itemPublicTokenExchange({public_token:q.body.public_token});const empresa=q.body.empresa==='Kratos'?'Kratos':'BH Pro';if(empresa==='Kratos'){D.plaid_access_token_kratos=x.data.access_token;}else{D.plaid_access_token_bhpro=x.data.access_token;D.plaid_access_token=x.data.access_token;}saveToDisk();console.log('[Plaid] Token saved successfully for', empresa);r.json({success:true});}catch(e){console.error('[Plaid] exchange-token FAILED:', e.response?.data || e.message);r.status(500).json({error:e.response?.data?.error_message || e.message});}});
 app.get('/api/plaid/transactions',adminAuth,async(q,r)=>{
@@ -143,13 +143,16 @@ doc.fontSize(9).font('Helvetica').fillColor(g).text('Invoice Number',350,95).tex
 doc.fillColor(d).font('Helvetica-Bold').text(inv.number||'',460,95).font('Helvetica').text(inv.date||'',460,110).text(inv.dueDate||inv.date||'',460,125);
 doc.moveTo(50,148).lineTo(560,148).lineWidth(1).strokeColor(d).stroke();
 doc.fontSize(10).font('Helvetica-Bold').fillColor(d).text('Bill to',50,164).text('Ship to',310,164);
+const isAcqualinaDefault = !inv.billAddress && !inv.billPhone && (!inv.billTo || inv.billTo.toLowerCase().includes('acqualina'));
+const billAddrLine1 = inv.billAddress || (isAcqualinaDefault ? '17875 Collins Ave, Sunny Isles Beach,' : '');
+const billAddrLine2 = inv.billPhone || (isAcqualinaDefault ? 'Florida 33160' : '');
 doc.font('Helvetica').fillColor(d).fontSize(9)
   .text(inv.billTo||'Acqualina Management LLC',50,179)
-  .text(inv.billAddress||'17875 Collins Ave, Sunny Isles Beach,',50,192)
-  .text(inv.billCity||'Florida 33160',50,205)
+  .text(billAddrLine1,50,192)
+  .text(billAddrLine2,50,205)
   .text(inv.shipTo||inv.billTo||'Acqualina Management LLC',310,179)
-  .text(inv.shipAddress||inv.billAddress||'17875 Collins Ave, Sunny Isles Beach,',310,192)
-  .text(inv.shipCity||inv.billCity||'Florida 33160',310,205);
+  .text(billAddrLine1,310,192)
+  .text(billAddrLine2,310,205);
 doc.fontSize(10).font('Helvetica-Bold').fillColor(d).text('Description of Work',50,236);
 // Build normalized item list: prefer inv.items[], fallback to legacy single item/description/amount
 let items = Array.isArray(inv.items) && inv.items.length ? inv.items : [{
@@ -224,7 +227,7 @@ app.post('/api/invoice/email',auth,async(q,r)=>{
       pdfStream.on('error', reject);
       try { renderInvoicePDF(invoice, pdfStream); } catch(e) { reject(e); }
     });
-    const t=nodemailer.createTransport({host:'smtp.office365.com',port:587,secure:false,auth:{user:EU,pass:EP},tls:{ciphers:'SSLv3'}});
+    const t=nodemailer.createTransport({host:'smtp.office365.com',port:587,secure:false,auth:{user:EU,pass:EP},tls:{ciphers:'SSLv3'},connectionTimeout:15000,greetingTimeout:15000,socketTimeout:15000});
     await t.sendMail({
       from:`"${companyName}" <${EU}>`,
       to,
