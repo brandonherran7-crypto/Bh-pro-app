@@ -288,6 +288,47 @@ app.post('/api/claude', auth, async (q, r) => {
           },
           required: ['nums', 'estado']
         }
+      },
+      {
+        name: 'create_invoice',
+        description: 'Crea una factura nueva completa (con número automático siguiente en la secuencia, listo para guardar). Úsala cuando el usuario pida generar/crear una factura por voz o texto, describiendo el cliente y el trabajo. Si el usuario menciona un cliente que ya existe en las direcciones guardadas o en facturas anteriores, usa exactamente ese mismo nombre para que se reconozca. Si el usuario dice que es "como" un trabajo anterior, usa esa factura anterior como plantilla para la descripción/ítems.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            billTo: { type: 'string', description: 'Nombre del cliente/edificio a facturar' },
+            projectName: { type: 'string', description: 'Nombre del proyecto/trabajo' },
+            items: {
+              type: 'array',
+              description: 'Ítems de la factura',
+              items: {
+                type: 'object',
+                properties: {
+                  desc: { type: 'string', description: 'Descripción corta del ítem' },
+                  detail: { type: 'string', description: 'Detalle/scope of work más largo (opcional)' },
+                  qty: { type: 'number', description: 'Cantidad, normalmente 1' },
+                  rate: { type: 'number', description: 'Precio de ese ítem en dólares' }
+                },
+                required: ['desc', 'qty', 'rate']
+              }
+            }
+          },
+          required: ['billTo', 'items']
+        }
+      },
+      {
+        name: 'create_project',
+        description: 'Crea un proyecto nuevo (con número automático siguiente en la secuencia). Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            nombre: { type: 'string', description: 'Nombre del proyecto' },
+            cliente: { type: 'string', description: 'Nombre del cliente' },
+            valor: { type: 'number', description: 'Valor cotizado del proyecto en dólares' },
+            loc: { type: 'string', description: 'Ubicación/edificio (opcional)' },
+            estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Por defecto Activo si no se especifica' }
+          },
+          required: ['nombre', 'cliente', 'valor']
+        }
       }
     ];
 
@@ -321,6 +362,71 @@ app.post('/api/claude', auth, async (q, r) => {
         }
         messages.push({ role: 'assistant', content: data.content });
         messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: `Se actualizaron ${updated.length} proyecto(s) a estado "${estado}": ${updated.join(', ')||'(ninguno encontrado)'}.` }] });
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+        });
+        data = await res.json();
+      } else if (toolUse && toolUse.name === 'create_invoice') {
+        const { billTo, projectName, items } = toolUse.input || {};
+        const emp = empresa || 'BH Pro';
+        let toolResultMsg;
+        if (!billTo || !Array.isArray(items) || !items.length) {
+          toolResultMsg = 'Error: faltan datos (billTo o items) para crear la factura.';
+        } else {
+          const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
+          const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
+          const nums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
+          const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
+          const nextNum = (Math.max(0, ...nums, ...proyNums) + 1).toString();
+          const cleanItems = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
+          const total = cleanItems.reduce((s,it)=>s+(it.qty*it.rate),0);
+          const todayISO = new Date().toISOString().slice(0,10);
+          const newInvoice = {
+            id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+            number: nextNum, empresa: emp, date: todayISO, dueDate: todayISO,
+            billTo, shipTo: billTo, amount: total, items: cleanItems,
+            item: projectName || cleanItems[0]?.desc || '', projectName: projectName || cleanItems[0]?.desc || '',
+            note: '', sent: false
+          };
+          D.facturas.push(newInvoice);
+          saveToDisk(); dataChanged = true; changedCount = 1;
+          toolResultMsg = `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`;
+        }
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+        });
+        data = await res.json();
+      } else if (toolUse && toolUse.name === 'create_project') {
+        const { nombre, cliente, valor, loc, estado } = toolUse.input || {};
+        const emp = empresa || 'BH Pro';
+        let toolResultMsg;
+        if (!nombre || !cliente || valor === undefined) {
+          toolResultMsg = 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.';
+        } else {
+          const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
+          const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
+          const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
+          const facNums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
+          const nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
+          const newProject = {
+            id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+            num: nextNum, nombre, cliente, valor: valor||0,
+            inicio: new Date().toISOString().slice(0,10), fin: '',
+            estado: estado || 'Activo', notas: '', loc: loc||'', empresa: emp,
+            pedroPct: 0
+          };
+          D.proyectos.push(newProject);
+          saveToDisk(); dataChanged = true; changedCount = 1;
+          toolResultMsg = `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`;
+        }
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
         res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
