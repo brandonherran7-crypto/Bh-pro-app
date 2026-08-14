@@ -272,7 +272,7 @@ app.listen(PORT,()=>console.log(`BH Pro running on port ${PORT}`));
 // CLAUDE AI ENDPOINT
 app.post('/api/claude', auth, async (q, r) => {
   try {
-    const { system, message, proyectos, empresa } = q.body;
+    const { system, message, proyectos, empresa, image } = q.body;
     const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_KEY) return r.json({ reply: 'API key no configurada. Agrega ANTHROPIC_API_KEY en Render.' });
 
@@ -329,12 +329,61 @@ app.post('/api/claude', auth, async (q, r) => {
           },
           required: ['nombre', 'cliente', 'valor']
         }
+      },
+      {
+        name: 'register_cobro',
+        description: 'Registra un cobro/pago recibido (por ejemplo, leído de una foto de un wire transfer o comprobante de transferencia). Úsala cuando el usuario suba una imagen de un comprobante de pago, o describa por texto que le pagaron algo. Requiere identificar a qué número de proyecto corresponde — si no es claro por el nombre del cliente/edificio, pregunta antes de usar esta herramienta.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            proyectoNum: { type: 'string', description: 'Número del proyecto al que corresponde este pago (debe existir en la lista de proyectos actuales)' },
+            monto: { type: 'number', description: 'Monto del pago en dólares, leído del comprobante' },
+            fecha: { type: 'string', description: 'Fecha del pago en formato YYYY-MM-DD, si se puede leer del comprobante; si no, usar la fecha de hoy' },
+            notas: { type: 'string', description: 'Notas adicionales, ej. nombre del remitente o número de referencia del wire' }
+          },
+          required: ['proyectoNum', 'monto']
+        }
+      },
+      {
+        name: 'register_gasto',
+        description: 'Registra un gasto (materiales, herramientas, etc.), ligado a un proyecto o como gasto general si el usuario dice que no es de ningún proyecto específico (ej. reembolso aparte). Úsala cuando el usuario pida registrar un gasto por voz/texto, o cuando suba una foto de un recibo de compra.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            proyectoNum: { type: 'string', description: 'Número del proyecto al que pertenece el gasto. Si el usuario dice que es un gasto general sin proyecto (ej. para reembolsar aparte), deja este campo vacío.' },
+            categoria: { type: 'string', enum: ['Materiales', 'Herramientas', 'Transporte', 'Otros'], description: 'Categoría del gasto' },
+            monto: { type: 'number', description: 'Monto del gasto en dólares' },
+            descripcion: { type: 'string', description: 'Qué se compró' }
+          },
+          required: ['categoria', 'monto', 'descripcion']
+        }
+      },
+      {
+        name: 'register_nomina',
+        description: 'Registra un pago de nómina/jornal a un empleado, ligado a un proyecto. Úsala cuando el usuario pida registrar el pago a un trabajador por voz/texto.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            proyectoNum: { type: 'string', description: 'Número del proyecto al que pertenece el trabajo' },
+            empleado: { type: 'string', description: 'Nombre del empleado' },
+            horas: { type: 'number', description: 'Horas o días trabajados' },
+            tarifa: { type: 'number', description: 'Tarifa por hora/día en dólares' },
+            total: { type: 'number', description: 'Total pagado en dólares. Si no se especifica, se calcula como horas x tarifa.' }
+          },
+          required: ['proyectoNum', 'empleado']
+        }
       }
     ];
 
     const fullSystem = system + (proyectos ? `\n\nLista de proyectos actuales (num:estado:fechaInicio): ${proyectos}\n\nSi el usuario pide cambiar el estado de proyectos (uno, varios, o "todos los de tal fecha/año/condición"), identifica los números de proyecto correctos de la lista de arriba y usa la herramienta update_project_status. Si no estás seguro de cuáles proyectos aplican, pregunta antes de actuar.` : '');
 
-    const messages = [{ role: 'user', content: message }];
+    const userContent = image && image.base64
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: image.mediaType || 'image/jpeg', data: image.base64 } },
+          { type: 'text', text: message }
+        ]
+      : message;
+    const messages = [{ role: 'user', content: userContent }];
     let res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
@@ -424,6 +473,100 @@ app.post('/api/claude', auth, async (q, r) => {
           D.proyectos.push(newProject);
           saveToDisk(); dataChanged = true; changedCount = 1;
           toolResultMsg = `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`;
+        }
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+        });
+        data = await res.json();
+      } else if (toolUse && toolUse.name === 'register_cobro') {
+        const { proyectoNum, monto, fecha, notas } = toolUse.input || {};
+        const emp = empresa || 'BH Pro';
+        let toolResultMsg;
+        const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
+        if (!proyectoNum || monto === undefined) {
+          toolResultMsg = 'Error: faltan datos (proyectoNum o monto) para registrar el cobro.';
+        } else if (!proj) {
+          toolResultMsg = `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`;
+        } else {
+          const newCobro = {
+            id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+            num: proyectoNum, cliente: proj.cliente||'', monto: monto||0,
+            fecha: fecha || new Date().toISOString().slice(0,10),
+            estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: '',
+            fpago: fecha || new Date().toISOString().slice(0,10), empresa: emp,
+            notas: notas || 'Registrado por asistente desde comprobante de pago'
+          };
+          D.cobros.push(newCobro);
+          saveToDisk(); dataChanged = true; changedCount = 1;
+          toolResultMsg = `Cobro de $${(monto||0).toFixed(2)} registrado para el proyecto #${proyectoNum} "${proj.nombre}". Ya está guardado en Cobros.`;
+        }
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+        });
+        data = await res.json();
+      } else if (toolUse && toolUse.name === 'register_gasto') {
+        const { proyectoNum, categoria, monto, descripcion } = toolUse.input || {};
+        const emp = empresa || 'BH Pro';
+        let toolResultMsg;
+        if (monto === undefined || !descripcion) {
+          toolResultMsg = 'Error: faltan datos (monto o descripcion) para registrar el gasto.';
+        } else {
+          let proj = null;
+          if (proyectoNum) {
+            proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
+            if (!proj) toolResultMsg = `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`;
+          }
+          if (!proyectoNum || proj) {
+            const newGasto = {
+              id: 'gas_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+              fecha: new Date().toISOString().slice(0,10),
+              proy: proyectoNum || '', cat: categoria || 'Otros', monto: monto||0,
+              desc: descripcion, recibo: '', foto: '', empresa: emp
+            };
+            D.gastos.push(newGasto);
+            saveToDisk(); dataChanged = true; changedCount = 1;
+            toolResultMsg = proyectoNum
+              ? `Gasto de $${(monto||0).toFixed(2)} ("${descripcion}") registrado para el proyecto #${proyectoNum} "${proj.nombre}".`
+              : `Gasto general de $${(monto||0).toFixed(2)} ("${descripcion}") registrado sin ligar a ningún proyecto.`;
+          }
+        }
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+        });
+        data = await res.json();
+      } else if (toolUse && toolUse.name === 'register_nomina') {
+        const { proyectoNum, empleado, horas, tarifa, total } = toolUse.input || {};
+        const emp = empresa || 'BH Pro';
+        let toolResultMsg;
+        const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
+        if (!proyectoNum || !empleado) {
+          toolResultMsg = 'Error: faltan datos (proyectoNum o empleado) para registrar la nómina.';
+        } else if (!proj) {
+          toolResultMsg = `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`;
+        } else {
+          const h = horas || 1;
+          const t = tarifa || 0;
+          const tot = total !== undefined ? total : (h * t);
+          const newNomina = {
+            id: 'nom_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+            fecha: new Date().toISOString().slice(0,10),
+            proy: proyectoNum, empleado, horas: h, tarifa: t, total: tot, notas: ''
+          };
+          D.nomina.push(newNomina);
+          saveToDisk(); dataChanged = true; changedCount = 1;
+          toolResultMsg = `Pago de nómina registrado: ${empleado}, $${tot.toFixed(2)}, proyecto #${proyectoNum} "${proj.nombre}".`;
         }
         messages.push({ role: 'assistant', content: data.content });
         messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
