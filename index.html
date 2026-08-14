@@ -522,7 +522,7 @@ select option{background:var(--black-3);}
   <div class="cpanel" id="cpanel">
     <div class="cheader"><div class="chtitle">✦ Claude — Asistente Financiero</div><button class="cclose" onclick="toggleClaude()">✕</button></div>
     <div class="cmsgs" id="cmsgs"><div class="msg ma" data-i18n="chat.greeting">Hola Brandon! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?</div></div>
-    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="sendClaude()">➤</button></div>
+    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
   </div>
   <button class="cbtn" onclick="toggleClaude()">🤖</button>
 </div>
@@ -1164,17 +1164,17 @@ async function sendInvoiceEmail() {
     } else {
       // The automatic send failed server-side. Falling back to mailto opens the device's own
       // mail app (Outlook), but mailto links can NEVER carry attachments — that's a browser/OS
-      // limitation, not something fixable in code. window.open() fires IMMEDIATELY (not via
-      // setTimeout) or Safari/iOS will block it as a popup.
+      // limitation, not something fixable in code. Using location.href (a navigation) instead of
+      // window.open() (a popup) avoids Safari/iOS blocking it after an async/await chain.
       console.error('Email send failed:', data.message);
       document.getElementById('em-status').innerHTML = `❌ Falló el envío automático (${data.message || 'error desconocido'}).<br>Se abrió tu app de correo, pero SIN el PDF adjunto — descárgalo y adjúntalo tú mismo.`;
       document.getElementById('em-status').style.color = '#E74C3C';
       const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-      window.open(mailtoLink);
+      window.location.href = mailtoLink;
     }
   } catch(e) {
     // Fallback mailto — but say WHY, instead of silently opening Mail with no explanation.
-    // window.open() must fire IMMEDIATELY (no setTimeout) or Safari/iOS blocks it as a popup.
+    // location.href (navigation) instead of window.open() (popup) avoids Safari/iOS blocking.
     const to2 = document.getElementById('em-to').value;
     const sub = document.getElementById('em-sub').value;
     const msg = document.getElementById('em-msg').value;
@@ -1182,7 +1182,7 @@ async function sendInvoiceEmail() {
     console.error('Email send exception:', e);
     document.getElementById('em-status').innerHTML = `❌ No se pudo enviar automáticamente (${reason}).<br>Se abrió tu app de correo, pero SIN el PDF adjunto — descárgalo y adjúntalo tú mismo.`;
     document.getElementById('em-status').style.color = '#E74C3C';
-    window.open(`mailto:${to2}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(msg)}`);
+    window.location.href = `mailto:${to2}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(msg)}`;
   }
 }
 
@@ -2047,6 +2047,37 @@ function exportCSV() {
 // ===== CLAUDE =====
 function toggleClaude() { document.getElementById('cpanel').classList.toggle('open'); }
 
+// ===== VOICE INPUT (dictate to Claude assistant) =====
+let VOICE_RECOGNITION = null;
+let VOICE_ACTIVE = false;
+function toggleVoiceInput() {
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionAPI) {
+    alert(tt('Tu navegador no soporta dictado por voz. Prueba desde Safari en iPhone o Chrome.', 'Your browser does not support voice dictation. Try Safari on iPhone or Chrome.'));
+    return;
+  }
+  const btn = document.getElementById('cmicbtn');
+  if (VOICE_ACTIVE) {
+    VOICE_RECOGNITION && VOICE_RECOGNITION.stop();
+    return;
+  }
+  VOICE_RECOGNITION = new SpeechRecognitionAPI();
+  VOICE_RECOGNITION.lang = CURRENT_LANG === 'en' ? 'en-US' : 'es-US';
+  VOICE_RECOGNITION.interimResults = true;
+  VOICE_RECOGNITION.continuous = false;
+  const inp = document.getElementById('cinput');
+  const baseText = inp.value ? inp.value + ' ' : '';
+  VOICE_RECOGNITION.onstart = () => { VOICE_ACTIVE = true; btn.style.background = '#E74C3C'; btn.textContent = '⏹'; };
+  VOICE_RECOGNITION.onresult = (event) => {
+    let transcript = '';
+    for (let i = 0; i < event.results.length; i++) transcript += event.results[i][0].transcript;
+    inp.value = baseText + transcript;
+  };
+  VOICE_RECOGNITION.onerror = () => { VOICE_ACTIVE = false; btn.style.background = '#2a4d80'; btn.textContent = '🎤'; };
+  VOICE_RECOGNITION.onend = () => { VOICE_ACTIVE = false; btn.style.background = '#2a4d80'; btn.textContent = '🎤'; };
+  VOICE_RECOGNITION.start();
+}
+
 async function sendClaude() {
   const inp = document.getElementById('cinput');
   const text = inp.value.trim(); if (!text) return;
@@ -2056,8 +2087,18 @@ async function sendClaude() {
   msgs.innerHTML += `<div class="msg ml" id="lmsg">${tt('Analizando...','Analyzing...')}</div>`;
   msgs.scrollTop = msgs.scrollHeight;
   const t = calcTotals(ACTIVE_COMPANY);
+  const facturasEmp = S.facturas.filter(f=>(f.empresa||'BH Pro')===ACTIVE_COMPANY);
+  const recentInvoices = facturasEmp.slice(-15).map(f => {
+    const itemsDesc = (f.items||[]).map(it=>`"${it.desc}"${it.detail?` (detalle: ${it.detail.slice(0,120)})`:''} x${it.qty} @$${it.rate}`).join('; ');
+    return `Factura #${f.number} — Cliente: "${f.billTo}" — Proyecto: "${f.projectName||f.item}" — Ítems: ${itemsDesc||'(sin ítems)'} — Total: $${f.amount}`;
+  }).join('\n');
+  const savedLocs = S.locacionesFacturacion.filter(l=>(l.empresa||'BH Pro')===ACTIVE_COMPANY).map(l=>`"${l.nombre}" (dirección: ${l.direccion||'?'}, tel: ${l.telefono||'?'})`).join('; ');
   const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
 Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
+Clientes/direcciones guardadas: ${savedLocs || '(ninguna guardada aún)'}
+Últimas facturas (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes):
+${recentInvoices || '(sin facturas aún)'}
+Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project. Si menciona un cliente que ya aparece arriba, usa el nombre exacto guardado. Si dice que es un trabajo "similar" a uno anterior, usa esa factura anterior como referencia para los ítems/descripción, ajustando lo que el usuario indique que es diferente (precio, cantidad, etc.). Si falta información esencial (como el precio), pregúntala antes de crear nada.
 Responde en español, conciso y directo.`;
   const proyList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`${p.num}:${p.estado}:${p.inicio||'?'}`).join(', ');
   try {
@@ -2067,7 +2108,7 @@ Responde en español, conciso y directo.`;
     document.getElementById('lmsg').remove();
     msgs.innerHTML += `<div class="msg ma">${reply.replace(/\n/g,'<br>')}</div>`;
     if (d.dataChanged) {
-      msgs.innerHTML += `<div class="msg ma" style="color:var(--green);font-weight:600;">✅ ${d.changedCount} proyecto(s) actualizados. Refrescando...</div>`;
+      msgs.innerHTML += `<div class="msg ma" style="color:var(--green);font-weight:600;">✅ ${tt('Listo, actualizando la app...','Done, refreshing the app...')}</div>`;
       await loadData();
       renderAll();
     }
