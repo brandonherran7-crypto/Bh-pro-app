@@ -123,12 +123,12 @@ select option{background:var(--black-3);}
 /* CLAUDE */
 .claude-wrap{position:fixed;bottom:16px;right:14px;z-index:200;}
 .cbtn{background:var(--gold);color:white;border:none;border-radius:50%;width:48px;height:48px;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 20px rgba(201,168,76,.5);display:flex;align-items:center;justify-content:center;}
-.cpanel{display:none;position:fixed;bottom:76px;right:14px;width:calc(100vw - 28px);max-width:360px;background:var(--black-2);border:1px solid #333;border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.8);flex-direction:column;}
+.cpanel{display:none;position:fixed;bottom:76px;right:14px;width:calc(100vw - 28px);max-width:420px;background:var(--black-2);border:1px solid #333;border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.8);flex-direction:column;}
 .cpanel.open{display:flex;}
 .cheader{background:var(--black-4);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
 .chtitle{font-family:'Playfair Display',serif;font-size:.85rem;color:var(--gold);}
 .cclose{background:none;border:none;color:var(--gray);font-size:1.1rem;cursor:pointer;}
-.cmsgs{height:190px;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;}
+.cmsgs{height:min(60vh,520px);overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;}
 .msg{padding:7px 10px;border-radius:8px;font-size:.72rem;line-height:1.5;max-width:92%;}
 .mu{background:#1a2a3a;color:var(--white-2);align-self:flex-end;}
 .ma{background:var(--black-4);color:var(--white-2);align-self:flex-start;border-left:3px solid var(--gold);}
@@ -522,7 +522,9 @@ select option{background:var(--black-3);}
   <div class="cpanel" id="cpanel">
     <div class="cheader"><div class="chtitle">✦ Claude — Asistente Financiero</div><button class="cclose" onclick="toggleClaude()">✕</button></div>
     <div class="cmsgs" id="cmsgs"><div class="msg ma" data-i18n="chat.greeting">Hola Brandon! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?</div></div>
-    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
+    <div id="cimg-preview" style="display:none;padding:6px 10px 0;position:relative;"><img id="cimg-preview-img" style="max-height:70px;border-radius:6px;border:1px solid #2a4d80;"><button onclick="clearChatImage()" style="position:absolute;top:2px;left:calc(6px + 70px * 0.75);background:#E74C3C;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;">✕</button></div>
+    <input type="file" id="cimg-input" accept="image/*" capture="environment" style="display:none;" onchange="handleChatImageSelect(event)">
+    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto de comprobante">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
   </div>
   <button class="cbtn" onclick="toggleClaude()">🤖</button>
 </div>
@@ -2047,6 +2049,28 @@ function exportCSV() {
 // ===== CLAUDE =====
 function toggleClaude() { document.getElementById('cpanel').classList.toggle('open'); }
 
+// ===== IMAGE ATTACHMENT (e.g. wire transfer / payment screenshot) =====
+let PENDING_CHAT_IMAGE = null; // { base64, mediaType }
+function handleChatImageSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const result = reader.result; // data:image/png;base64,....
+    const [header, base64] = result.split(',');
+    const mediaType = header.match(/data:(.*);base64/)[1];
+    PENDING_CHAT_IMAGE = { base64, mediaType };
+    document.getElementById('cimg-preview-img').src = result;
+    document.getElementById('cimg-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  event.target.value = ''; // allow re-selecting the same file later
+}
+function clearChatImage() {
+  PENDING_CHAT_IMAGE = null;
+  document.getElementById('cimg-preview').style.display = 'none';
+}
+
 // ===== VOICE INPUT (dictate to Claude assistant) =====
 let VOICE_RECOGNITION = null;
 let VOICE_ACTIVE = false;
@@ -2080,12 +2104,18 @@ function toggleVoiceInput() {
 
 async function sendClaude() {
   const inp = document.getElementById('cinput');
-  const text = inp.value.trim(); if (!text) return;
+  const text = inp.value.trim();
+  const img = PENDING_CHAT_IMAGE;
+  if (!text && !img) return;
   inp.value = '';
   const msgs = document.getElementById('cmsgs');
-  msgs.innerHTML += `<div class="msg mu">${text}</div>`;
-  msgs.innerHTML += `<div class="msg ml" id="lmsg">${tt('Analizando...','Analyzing...')}</div>`;
+  let userBubble = '';
+  if (img) userBubble += `<img src="data:${img.mediaType};base64,${img.base64}" style="max-width:180px;border-radius:8px;display:block;margin-bottom:6px;">`;
+  if (text) userBubble += text;
+  msgs.innerHTML += `<div class="msg mu">${userBubble}</div>`;
+  msgs.innerHTML += `<div class="msg ml" id="lmsg">${tt(img?'Leyendo la imagen...':'Analizando...','Analyzing...')}</div>`;
   msgs.scrollTop = msgs.scrollHeight;
+  clearChatImage();
   const t = calcTotals(ACTIVE_COMPANY);
   const facturasEmp = S.facturas.filter(f=>(f.empresa||'BH Pro')===ACTIVE_COMPANY);
   const recentInvoices = facturasEmp.slice(-15).map(f => {
@@ -2093,16 +2123,20 @@ async function sendClaude() {
     return `Factura #${f.number} — Cliente: "${f.billTo}" — Proyecto: "${f.projectName||f.item}" — Ítems: ${itemsDesc||'(sin ítems)'} — Total: $${f.amount}`;
   }).join('\n');
   const savedLocs = S.locacionesFacturacion.filter(l=>(l.empresa||'BH Pro')===ACTIVE_COMPANY).map(l=>`"${l.nombre}" (dirección: ${l.direccion||'?'}, tel: ${l.telefono||'?'})`).join('; ');
+  const proyectosEmpList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`#${p.num} "${p.nombre}" cliente:"${p.cliente}"`).join('; ');
   const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
 Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
 Clientes/direcciones guardadas: ${savedLocs || '(ninguna guardada aún)'}
+Proyectos actuales (num, nombre, cliente) para hacer match cuando llegue un comprobante de pago: ${proyectosEmpList || '(sin proyectos)'}
 Últimas facturas (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes):
 ${recentInvoices || '(sin facturas aún)'}
 Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project. Si menciona un cliente que ya aparece arriba, usa el nombre exacto guardado. Si dice que es un trabajo "similar" a uno anterior, usa esa factura anterior como referencia para los ítems/descripción, ajustando lo que el usuario indique que es diferente (precio, cantidad, etc.). Si falta información esencial (como el precio), pregúntala antes de crear nada.
+Cuando el usuario pida registrar un gasto, un pago de nómina/jornal a un empleado, usa register_gasto / register_nomina respectivamente. Siempre identifica a qué número de proyecto corresponde antes de usar estas herramientas (a menos que el usuario diga explícitamente que es un gasto general sin proyecto). Si no es claro a qué proyecto pertenece, pregunta antes de registrar nada.
+Si el usuario adjunta una imagen de un comprobante de pago/wire transfer/transferencia, lee el monto, la fecha, y el nombre del remitente/cliente de la imagen. Trata de identificar a qué proyecto de la lista de arriba corresponde (por nombre del cliente o del edificio). Usa la herramienta register_cobro para registrarlo. Si no logras identificar con certeza a qué proyecto pertenece, pregúntale al usuario cuál es antes de registrar nada — nunca adivines el proyecto si hay ambigüedad.
 Responde en español, conciso y directo.`;
   const proyList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`${p.num}:${p.estado}:${p.inicio||'?'}`).join(', ');
   try {
-    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:text,proyectos:proyList,empresa:ACTIVE_COMPANY})});
+    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:text||'(imagen adjunta, sin texto)',image:img,proyectos:proyList,empresa:ACTIVE_COMPANY})});
     const d = await r.json();
     const reply = d.reply || d.content?.[0]?.text || 'No pude procesar la respuesta.';
     document.getElementById('lmsg').remove();
