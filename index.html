@@ -2118,7 +2118,8 @@ async function sendClaude() {
   clearChatImage();
   const t = calcTotals(ACTIVE_COMPANY);
   const facturasEmp = S.facturas.filter(f=>(f.empresa||'BH Pro')===ACTIVE_COMPANY);
-  const recentInvoices = facturasEmp.slice(-15).map(f => {
+  const facturasEmpSorted = [...facturasEmp].sort((a,b) => (parseInt(b.number)||0) - (parseInt(a.number)||0));
+  const recentInvoices = facturasEmpSorted.slice(0, 30).map(f => {
     const itemsDesc = (f.items||[]).map(it=>`"${it.desc}"${it.detail?` (detalle: ${it.detail.slice(0,120)})`:''} x${it.qty} @$${it.rate}`).join('; ');
     return `Factura #${f.number} — Cliente: "${f.billTo}" — Proyecto: "${f.projectName||f.item}" — Ítems: ${itemsDesc||'(sin ítems)'} — Total: $${f.amount}`;
   }).join('\n');
@@ -2128,9 +2129,14 @@ async function sendClaude() {
 Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
 Clientes/direcciones guardadas: ${savedLocs || '(ninguna guardada aún)'}
 Proyectos actuales (num, nombre, cliente) para hacer match cuando llegue un comprobante de pago: ${proyectosEmpList || '(sin proyectos)'}
-Últimas facturas (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes):
+Últimas facturas, ordenadas de la MÁS RECIENTE a la más antigua (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes — la primera que coincida con el cliente mencionado es la más reciente de ese cliente):
 ${recentInvoices || '(sin facturas aún)'}
-Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project. Si menciona un cliente que ya aparece arriba, usa el nombre exacto guardado. Si dice que es un trabajo "similar" a uno anterior, usa esa factura anterior como referencia para los ítems/descripción, ajustando lo que el usuario indique que es diferente (precio, cantidad, etc.). Si falta información esencial (como el precio), pregúntala antes de crear nada.
+Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project de inmediato, sin hacer preguntas innecesarias. Reglas para decidir con la información disponible en vez de preguntar:
+- Si el usuario menciona un cliente (ej. "Acqualina") y dice "lo mismo", "similar", "como el anterior", o no da más detalle: busca en la lista de "Últimas facturas" de arriba la más reciente que sea de ese mismo cliente, y úsala completa como plantilla (mismo precio, misma descripción, mismos ítems) — NO preguntes cuál factura anterior usar, asume que es la más reciente de ese cliente.
+- Aplica SOLO el cambio específico que el usuario mencione (ej. "que se hizo una línea abajo en la pared" = agrégalo como una nota/línea extra en el detalle del ítem existente, no como pregunta).
+- El nombre del proyecto puede ser el mismo que el de la factura plantilla si el usuario no da uno distinto.
+- Solo pregunta si de verdad no hay ninguna factura anterior de ese cliente en la lista (osea no tienes ninguna plantilla de la cual partir) Y el usuario tampoco dio un precio — en ese caso sí pregunta el precio, nada más.
+- Después de crear la factura, resume en una sola frase corta qué hiciste (cliente, monto, qué cambiaste) — no listes preguntas ya respondidas.
 Cuando el usuario pida registrar un gasto, un pago de nómina/jornal a un empleado, usa register_gasto / register_nomina respectivamente. Siempre identifica a qué número de proyecto corresponde antes de usar estas herramientas (a menos que el usuario diga explícitamente que es un gasto general sin proyecto). Si no es claro a qué proyecto pertenece, pregunta antes de registrar nada.
 Si el usuario adjunta una imagen de un comprobante de pago/wire transfer/transferencia, lee el monto, la fecha, y el nombre del remitente/cliente de la imagen. Trata de identificar a qué proyecto de la lista de arriba corresponde (por nombre del cliente o del edificio). Usa la herramienta register_cobro para registrarlo. Si no logras identificar con certeza a qué proyecto pertenece, pregúntale al usuario cuál es antes de registrar nada — nunca adivines el proyecto si hay ambigüedad.
 Responde en español, conciso y directo.`;
