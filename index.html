@@ -252,6 +252,13 @@ select option{background:var(--black-3);}
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.excel_import_desc">Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.</p>
     <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" onchange="handleExcelImport(this)">
     <div id="excel-import-status" style="font-size:.7rem;color:var(--gold);margin-top:8px;"></div>
+    <div id="excel-import-confirm" style="display:none;background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:12px;margin-top:8px;">
+      <div id="excel-import-summary" style="font-size:.75rem;color:var(--white);margin-bottom:10px;line-height:1.5;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" style="flex:1;" onclick="confirmExcelImport()">✅ Importar todo esto</button>
+        <button class="btn btn-sm btn-outline" onclick="cancelExcelImport()">Cancelar</button>
+      </div>
+    </div>
   </div>
   <div class="card admin-only" style="display:none;border:1px solid #ffb02033;">
     <div class="card-title" data-i18n="ct.datos_referencia">📦 Datos de referencia (11 ago 2026)</div>
@@ -523,8 +530,10 @@ select option{background:var(--black-3);}
     <div class="cheader"><div class="chtitle">✦ Claude — Asistente Financiero</div><button class="cclose" onclick="toggleClaude()">✕</button></div>
     <div class="cmsgs" id="cmsgs"><div class="msg ma" data-i18n="chat.greeting">Hola Brandon! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?</div></div>
     <div id="cimg-preview" style="display:none;padding:6px 10px 0;position:relative;"><img id="cimg-preview-img" style="max-height:70px;border-radius:6px;border:1px solid #2a4d80;"><button onclick="clearChatImage()" style="position:absolute;top:2px;left:calc(6px + 70px * 0.75);background:#E74C3C;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;">✕</button></div>
+    <div id="cxls-preview" style="display:none;padding:6px 10px 0;"><span style="background:#1B3A6B;color:var(--gold);padding:4px 10px;border-radius:6px;font-size:.7rem;">📊 <span id="cxls-preview-name"></span> <button onclick="clearChatExcel()" style="background:none;border:none;color:#E74C3C;cursor:pointer;font-weight:bold;">✕</button></span></div>
     <input type="file" id="cimg-input" accept="image/*" capture="environment" style="display:none;" onchange="handleChatImageSelect(event)">
-    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto de comprobante">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
+    <input type="file" id="cxls-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleChatExcelSelect(event)">
+    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cxls-input').click()" style="background:#1B6B3A;margin-right:4px;" title="Adjuntar Excel/CSV">📊</button><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto de comprobante">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
   </div>
   <button class="cbtn" onclick="toggleClaude()">🤖</button>
 </div>
@@ -1210,53 +1219,292 @@ function mapExcelRow(row) {
   });
   return out;
 }
-async function handleExcelImport(input) {
-  const file = input.files && input.files[0];
-  const status = document.getElementById('excel-import-status');
-  if (!file) return;
-  if (typeof XLSX === 'undefined') { status.textContent = '❌ Error cargando el lector de Excel. Revisa tu conexión.'; return; }
-  status.textContent = 'Leyendo archivo...';
-  try {
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data, {type:'array'});
+// Reads a raw sheet-to-array-of-arrays and finds the header row by looking for a row that
+// contains one of the given "signature" header labels (case/space-insensitive). Needed because
+// these sheets have a merged title row above the real headers, so the header isn't always row 0.
+function findHeaderRowIndex(aoa, signatureLabels) {
+  const norm = (s) => (s||'').toString().trim().toLowerCase().replace(/\s+/g,'');
+  const sigSet = signatureLabels.map(norm);
+  for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+    const row = (aoa[i]||[]).map(norm);
+    if (sigSet.some(sig => row.includes(sig))) return i;
+  }
+  return -1;
+}
+function sheetToObjects(sheet, signatureLabels) {
+  const aoa = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:''});
+  const headerIdx = findHeaderRowIndex(aoa, signatureLabels);
+  if (headerIdx === -1) return [];
+  const headers = aoa[headerIdx].map(h => (h||'').toString().trim());
+  const out = [];
+  for (let i = headerIdx+1; i < aoa.length; i++) {
+    const rowArr = aoa[i];
+    if (!rowArr || rowArr.every(c => c === '' || c === undefined || c === null)) continue;
+    const obj = {};
+    headers.forEach((h, idx) => { if (h) obj[h] = rowArr[idx]; });
+    out.push(obj);
+  }
+  return out;
+}
+function parseMoney(val) {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  const cleaned = val.toString().replace(/[$,]/g,'').trim();
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+function excelDateToISO(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().slice(0,10);
+  const s = val.toString().trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  return '';
+}
+let PENDING_EXCEL_PLAN = null;
+
+// Phase 1: read the workbook and compute what WOULD change, without touching S or saving yet.
+async function computeExcelImportPlan(file) {
+  const dataBuf = await file.arrayBuffer();
+  const wb = XLSX.read(dataBuf, {type:'array', cellDates:true});
+  const sheetNames = wb.SheetNames;
+  const findSheet = (needle) => sheetNames.find(n => n.toLowerCase().replace(/\s+/g,'').includes(needle));
+
+  const plan = {
+    usedMultiSheet: false,
+    proyectosToAdd: [], proyectosToUpdate: [],
+    gastosToAdd: [], gastosSkipped: 0,
+    nominaToAdd: [], nominaSkipped: 0,
+    cobrosToAdd: [], cobrosToUpdate: [],
+    fallbackProyectosToAdd: [], fallbackProyectosToUpdate: [], fallbackSkipped: 0
+  };
+
+  const proySheetName = findSheet('1_proyectos') || findSheet('proyectos');
+  if (proySheetName) {
+    plan.usedMultiSheet = true;
+    const rows = sheetToObjects(wb.Sheets[proySheetName], ['#PROYECTO','#PROY','PROYECTO']);
+    rows.forEach(row => {
+      const num = (row['#PROYECTO']||row['#PROY']||'').toString().trim();
+      if (!num) return;
+      const nombre = (row['NOMBRE PROYECTO']||'').toString().trim();
+      const cliente = (row['CLIENTE']||'').toString().trim();
+      const valor = parseMoney(row['VALOR COTIZADO']);
+      let estado = (row['ESTADO']||'').toString().trim();
+      if (!estado) estado = 'Activo';
+      const inicio = excelDateToISO(row['FECHA INICIO']);
+      const fin = excelDateToISO(row['FECHA FIN']);
+      const existing = S.proyectos.find(p => p.num === num && (p.empresa||'BH Pro') === ACTIVE_COMPANY);
+      const item = { num, nombre, cliente, valor, estado, inicio, fin };
+      if (existing) plan.proyectosToUpdate.push(item);
+      else plan.proyectosToAdd.push(item);
+    });
+  }
+
+  const gastoSheetName = findSheet('2_gastos') || findSheet('gastos');
+  if (gastoSheetName) {
+    plan.usedMultiSheet = true;
+    const rows = sheetToObjects(wb.Sheets[gastoSheetName], ['FECHA','#PROY']);
+    const existingKeys = new Set(S.gastos.map(g => g._srcKey).filter(Boolean));
+    rows.forEach(row => {
+      const proy = (row['#PROY']||'').toString().trim();
+      const monto = parseMoney(row['MONTO']);
+      const desc = (row['DESCRIPCIÓN']||row['DESCRIPCION']||'').toString().trim();
+      const fecha = excelDateToISO(row['FECHA']);
+      if (!monto && !desc) return;
+      const srcKey = `${fecha}|${proy}|${monto}|${desc}`.toLowerCase();
+      if (existingKeys.has(srcKey)) { plan.gastosSkipped++; return; }
+      plan.gastosToAdd.push({ fecha, proy, cat: (row['CATEGORÍA']||row['CATEGORIA']||'Otros').toString().trim(), monto, desc, recibo: (row['RECIBO/NOTA']||'').toString().trim(), _srcKey: srcKey });
+      existingKeys.add(srcKey);
+    });
+  }
+
+  const nominaSheetName = findSheet('3_nomina') || findSheet('nomina');
+  if (nominaSheetName) {
+    plan.usedMultiSheet = true;
+    const rows = sheetToObjects(wb.Sheets[nominaSheetName], ['FECHA','#PROY','EMPLEADO']);
+    const existingKeys = new Set(S.nomina.map(n => n._srcKey).filter(Boolean));
+    rows.forEach(row => {
+      const proy = (row['#PROY']||'').toString().trim();
+      const empleado = (row['EMPLEADO']||'').toString().trim();
+      const total = parseMoney(row['TOTAL PAGADO']);
+      const fecha = excelDateToISO(row['FECHA']);
+      if (!empleado) return;
+      const srcKey = `${fecha}|${proy}|${empleado}|${total}`.toLowerCase();
+      if (existingKeys.has(srcKey)) { plan.nominaSkipped++; return; }
+      plan.nominaToAdd.push({ fecha, proy, empleado, horas: parseMoney(row['HORAS/DÍAS']||row['HORAS/DIAS']), tarifa: parseMoney(row['TARIFA']), total, notas: (row['NOTAS']||'').toString().trim(), _srcKey: srcKey });
+      existingKeys.add(srcKey);
+    });
+  }
+
+  const cobroSheetName = findSheet('4_cobros') || findSheet('cobros');
+  if (cobroSheetName) {
+    plan.usedMultiSheet = true;
+    const rows = sheetToObjects(wb.Sheets[cobroSheetName], ['#FACTURA','#PROYECTO']);
+    rows.forEach(row => {
+      const numFactura = (row['#FACTURA']||'').toString().trim();
+      const numProy = (row['#PROYECTO']||numFactura||'').toString().trim();
+      if (!numFactura && !numProy) return;
+      const num = numFactura || numProy;
+      let estadoRaw = (row['ESTADO']||'').toString().trim().toLowerCase();
+      const estado = (estadoRaw === 'pago' || estadoRaw === 'pagado') ? 'Pagado' : 'Pendiente';
+      const cliente = (row['CLIENTE']||'').toString().trim();
+      const monto = parseMoney(row['MONTO']);
+      const fecha = excelDateToISO(row['FECHA FACTURA']);
+      const fpago = excelDateToISO(row['FECHA DE PAGO']) || excelDateToISO(row['FECHA PAGADO']);
+      const tipo = (row['TIPO DE PAGO']||'').toString().trim();
+      const cheque = (row['#CHEQUE/WIRE']||'').toString().trim();
+      const existing = S.cobros.find(c => c.num === num && (c.empresa||'BH Pro') === ACTIVE_COMPANY);
+      const item = { num, cliente, monto, fecha, estado, tipo, cheque, fpago };
+      if (existing) plan.cobrosToUpdate.push(item);
+      else plan.cobrosToAdd.push(item);
+    });
+  }
+
+  if (!plan.usedMultiSheet) {
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
-    if (!rows.length) { status.textContent = '⚠️ El archivo no tiene filas.'; return; }
-    let added = 0, updated = 0, skipped = 0;
     rows.forEach(rawRow => {
       const row = mapExcelRow(rawRow);
       const num = (row.num||'').toString().trim();
-      if (!num) { skipped++; return; }
+      if (!num) { plan.fallbackSkipped++; return; }
       const existing = S.proyectos.find(p => p.num === num);
-      if (existing) {
-        if (row.nombre) existing.nombre = row.nombre.toString();
-        if (row.cliente) existing.cliente = row.cliente.toString();
-        if (row.valor !== undefined && row.valor !== '') existing.valor = parseFloat(row.valor)||existing.valor;
-        if (row.estado) existing.estado = row.estado.toString();
-        if (row.notas) existing.notas = row.notas.toString();
-        if (row.loc) existing.loc = row.loc.toString();
-        updated++;
-      } else {
-        S.proyectos.push({
-          id: gid(), num,
-          nombre: (row.nombre||'').toString(),
-          cliente: (row.cliente||'').toString(),
-          valor: parseFloat(row.valor)||0,
-          inicio:'', fin:'',
-          estado: (row.estado||'Activo').toString(),
-          notas: (row.notas||'').toString(),
-          loc: (row.loc||'').toString()
-        });
-        added++;
-      }
+      const item = { num, nombre: (row.nombre||'').toString(), cliente: (row.cliente||'').toString(), valor: parseMoney(row.valor), estado: (row.estado||'Activo').toString(), notas: (row.notas||'').toString(), loc: (row.loc||'').toString() };
+      if (existing) plan.fallbackProyectosToUpdate.push(item);
+      else plan.fallbackProyectosToAdd.push(item);
     });
-    saveData();
-    renderAll();
-    status.textContent = `✅ Importado: ${added} nuevo${added!==1?'s':''}, ${updated} actualizado${updated!==1?'s':''}${skipped?`, ${skipped} fila(s) sin # de proyecto ignoradas`:''}.`;
+  }
+
+  return plan;
+}
+
+// Phase 2: actually apply a previously computed plan to S and save.
+async function applyExcelImportPlan(plan) {
+  let addedP=0, updatedP=0;
+  plan.proyectosToAdd.forEach(item => {
+    S.proyectos.push({ id: gid(), ...item, notas:'', loc:'', empresa: ACTIVE_COMPANY });
+    addedP++;
+  });
+  plan.proyectosToUpdate.forEach(item => {
+    const existing = S.proyectos.find(p => p.num === item.num && (p.empresa||'BH Pro') === ACTIVE_COMPANY);
+    if (!existing) return;
+    if (item.nombre) existing.nombre = item.nombre;
+    if (item.cliente) existing.cliente = item.cliente;
+    if (item.valor) existing.valor = item.valor;
+    if (item.estado) existing.estado = item.estado;
+    if (item.inicio) existing.inicio = item.inicio;
+    if (item.fin) existing.fin = item.fin;
+    updatedP++;
+  });
+
+  let addedG=0;
+  plan.gastosToAdd.forEach(item => {
+    S.gastos.push({ id: gid(), ...item, foto:'', empresa: ACTIVE_COMPANY });
+    addedG++;
+  });
+
+  let addedN=0;
+  plan.nominaToAdd.forEach(item => {
+    S.nomina.push({ id: gid(), ...item });
+    addedN++;
+  });
+
+  let addedC=0, updatedC=0;
+  plan.cobrosToAdd.forEach(item => {
+    S.cobros.push({ id: gid(), ...item, empresa: ACTIVE_COMPANY });
+    addedC++;
+  });
+  plan.cobrosToUpdate.forEach(item => {
+    const existing = S.cobros.find(c => c.num === item.num && (c.empresa||'BH Pro') === ACTIVE_COMPANY);
+    if (!existing) return;
+    if (item.cliente) existing.cliente = item.cliente;
+    if (item.monto) existing.monto = item.monto;
+    if (item.fecha) existing.fecha = item.fecha;
+    existing.estado = item.estado;
+    if (item.tipo) existing.tipo = item.tipo;
+    if (item.cheque) existing.cheque = item.cheque;
+    if (item.fpago) existing.fpago = item.fpago;
+    updatedC++;
+  });
+
+  let addedFP=0, updatedFP=0;
+  plan.fallbackProyectosToAdd.forEach(item => {
+    S.proyectos.push({ id: gid(), ...item, inicio:'', fin:'', empresa: ACTIVE_COMPANY });
+    addedFP++;
+  });
+  plan.fallbackProyectosToUpdate.forEach(item => {
+    const existing = S.proyectos.find(p => p.num === item.num);
+    if (!existing) return;
+    if (item.nombre) existing.nombre = item.nombre;
+    if (item.cliente) existing.cliente = item.cliente;
+    if (item.valor) existing.valor = item.valor;
+    if (item.estado) existing.estado = item.estado;
+    if (item.notas) existing.notas = item.notas;
+    if (item.loc) existing.loc = item.loc;
+    updatedFP++;
+  });
+
+  await saveData();
+  renderAll();
+  return { addedP: addedP+addedFP, updatedP: updatedP+updatedFP, addedG, addedN, addedC, updatedC };
+}
+
+async function handleExcelImport(input) {
+  const file = input.files && input.files[0];
+  const status = document.getElementById('excel-import-status');
+  const confirmBox = document.getElementById('excel-import-confirm');
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { status.textContent = '❌ Error cargando el lector de Excel. Revisa tu conexión.'; return; }
+  status.textContent = 'Leyendo archivo y comparando con lo que ya tienes...';
+  confirmBox.style.display = 'none';
+  try {
+    const plan = await computeExcelImportPlan(file);
+    PENDING_EXCEL_PLAN = plan;
     input.value = '';
+
+    const totalNew = plan.proyectosToAdd.length + plan.gastosToAdd.length + plan.nominaToAdd.length + plan.cobrosToAdd.length + plan.fallbackProyectosToAdd.length;
+    const totalUpdates = plan.proyectosToUpdate.length + plan.cobrosToUpdate.length + plan.fallbackProyectosToUpdate.length;
+    if (totalNew === 0 && totalUpdates === 0) {
+      status.textContent = '✅ Ya tienes todo esto al día — no encontré nada nuevo para importar.';
+      return;
+    }
+
+    status.textContent = '';
+    let summary = `<div style="margin-bottom:6px;color:var(--gold);font-weight:600;">📋 Esto es lo que encontré para importar:</div>`;
+    if (plan.proyectosToAdd.length) summary += `<div>🆕 <b>${plan.proyectosToAdd.length} proyecto(s) nuevo(s):</b> #${plan.proyectosToAdd.slice(0,10).map(p=>p.num).join(', #')}${plan.proyectosToAdd.length>10?'...':''}</div>`;
+    if (plan.proyectosToUpdate.length) summary += `<div>🔄 ${plan.proyectosToUpdate.length} proyecto(s) existente(s) se actualizarían</div>`;
+    if (plan.gastosToAdd.length) summary += `<div>💸 <b>${plan.gastosToAdd.length} gasto(s) nuevo(s)</b>${plan.gastosSkipped?` (${plan.gastosSkipped} ya existían, se ignoran)`:''}</div>`;
+    if (plan.nominaToAdd.length) summary += `<div>👷 <b>${plan.nominaToAdd.length} pago(s) de nómina nuevo(s)</b>${plan.nominaSkipped?` (${plan.nominaSkipped} ya existían, se ignoran)`:''}</div>`;
+    if (plan.cobrosToAdd.length) summary += `<div>💳 <b>${plan.cobrosToAdd.length} factura(s)/cobro(s) nuevo(s)</b></div>`;
+    if (plan.cobrosToUpdate.length) summary += `<div>🔄 ${plan.cobrosToUpdate.length} cobro(s) existente(s) se actualizarían (ej. cambios de estado a Pagado)</div>`;
+    if (plan.fallbackProyectosToAdd.length) summary += `<div>🆕 ${plan.fallbackProyectosToAdd.length} proyecto(s) nuevo(s) (formato simple)</div>`;
+    if (plan.fallbackProyectosToUpdate.length) summary += `<div>🔄 ${plan.fallbackProyectosToUpdate.length} proyecto(s) existente(s) se actualizarían (formato simple)</div>`;
+
+    document.getElementById('excel-import-summary').innerHTML = summary;
+    confirmBox.style.display = 'block';
   } catch(e) {
     status.textContent = '❌ Error leyendo el archivo: ' + e.message;
   }
+}
+
+async function confirmExcelImport() {
+  if (!PENDING_EXCEL_PLAN) return;
+  const status = document.getElementById('excel-import-status');
+  const confirmBox = document.getElementById('excel-import-confirm');
+  confirmBox.style.display = 'none';
+  status.textContent = 'Importando...';
+  const result = await applyExcelImportPlan(PENDING_EXCEL_PLAN);
+  status.innerHTML = `✅ <b>Proyectos:</b> ${result.addedP} nuevos, ${result.updatedP} actualizados` +
+    ` · <b>Gastos:</b> ${result.addedG} nuevos` +
+    ` · <b>Nómina:</b> ${result.addedN} nuevos` +
+    ` · <b>Cobros:</b> ${result.addedC} nuevos, ${result.updatedC} actualizados`;
+  PENDING_EXCEL_PLAN = null;
+}
+
+function cancelExcelImport() {
+  PENDING_EXCEL_PLAN = null;
+  document.getElementById('excel-import-confirm').style.display = 'none';
+  document.getElementById('excel-import-status').textContent = 'Importación cancelada — no se cambió nada.';
 }
 
 async function forceLoadBakedData() {
@@ -2071,6 +2319,38 @@ function clearChatImage() {
   document.getElementById('cimg-preview').style.display = 'none';
 }
 
+// ===== EXCEL/CSV ATTACHMENT for chat (read rows, let the assistant register them) =====
+let PENDING_CHAT_EXCEL = null; // { fileName, rowsText, rowCount }
+function handleChatExcelSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { alert(tt('Error cargando el lector de Excel. Revisa tu conexión.', 'Error loading the Excel reader. Check your connection.')); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      if (!rows.length) { alert(tt('El archivo no tiene filas de datos.', 'The file has no data rows.')); return; }
+      // Cap how many rows/characters we send so we don't blow past the model's context on huge files
+      const cappedRows = rows.slice(0, 300);
+      const rowsText = cappedRows.map((row, i) => `Fila ${i+1}: ` + Object.entries(row).map(([k,v])=>`${k}=${v}`).join(', ')).join('\n');
+      PENDING_CHAT_EXCEL = { fileName: file.name, rowsText, rowCount: rows.length, cappedCount: cappedRows.length };
+      document.getElementById('cxls-preview-name').textContent = `${file.name} (${rows.length} filas)`;
+      document.getElementById('cxls-preview').style.display = 'block';
+    } catch(err) {
+      alert(tt('No pude leer ese archivo. ¿Es un Excel o CSV válido?', 'Could not read that file. Is it a valid Excel or CSV?'));
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
+}
+function clearChatExcel() {
+  PENDING_CHAT_EXCEL = null;
+  document.getElementById('cxls-preview').style.display = 'none';
+}
+
 // ===== VOICE INPUT (dictate to Claude assistant) =====
 let VOICE_RECOGNITION = null;
 let VOICE_ACTIVE = false;
@@ -2106,30 +2386,35 @@ async function sendClaude() {
   const inp = document.getElementById('cinput');
   const text = inp.value.trim();
   const img = PENDING_CHAT_IMAGE;
-  if (!text && !img) return;
+  const xls = PENDING_CHAT_EXCEL;
+  if (!text && !img && !xls) return;
   inp.value = '';
   const msgs = document.getElementById('cmsgs');
   let userBubble = '';
   if (img) userBubble += `<img src="data:${img.mediaType};base64,${img.base64}" style="max-width:180px;border-radius:8px;display:block;margin-bottom:6px;">`;
+  if (xls) userBubble += `<span style="background:#1B3A6B;color:var(--gold);padding:3px 8px;border-radius:6px;font-size:.68rem;display:inline-block;margin-bottom:6px;">📊 ${xls.fileName} (${xls.rowCount} filas)</span><br>`;
   if (text) userBubble += text;
   msgs.innerHTML += `<div class="msg mu">${userBubble}</div>`;
-  msgs.innerHTML += `<div class="msg ml" id="lmsg">${tt(img?'Leyendo la imagen...':'Analizando...','Analyzing...')}</div>`;
+  msgs.innerHTML += `<div class="msg ml" id="lmsg">${tt(xls?'Leyendo el archivo y registrando...':(img?'Leyendo la imagen...':'Analizando...'),'Analyzing...')}</div>`;
   msgs.scrollTop = msgs.scrollHeight;
   clearChatImage();
+  clearChatExcel();
   const t = calcTotals(ACTIVE_COMPANY);
   const facturasEmp = S.facturas.filter(f=>(f.empresa||'BH Pro')===ACTIVE_COMPANY);
   const facturasEmpSorted = [...facturasEmp].sort((a,b) => (parseInt(b.number)||0) - (parseInt(a.number)||0));
-  const recentInvoices = facturasEmpSorted.slice(0, 30).map(f => {
+  const recentInvoices = facturasEmpSorted.map(f => {
     const itemsDesc = (f.items||[]).map(it=>`"${it.desc}"${it.detail?` (detalle: ${it.detail.slice(0,120)})`:''} x${it.qty} @$${it.rate}`).join('; ');
     return `Factura #${f.number} — Cliente: "${f.billTo}" — Proyecto: "${f.projectName||f.item}" — Ítems: ${itemsDesc||'(sin ítems)'} — Total: $${f.amount}`;
   }).join('\n');
   const savedLocs = S.locacionesFacturacion.filter(l=>(l.empresa||'BH Pro')===ACTIVE_COMPANY).map(l=>`"${l.nombre}" (dirección: ${l.direccion||'?'}, tel: ${l.telefono||'?'})`).join('; ');
-  const proyectosEmpList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`#${p.num} "${p.nombre}" cliente:"${p.cliente}"`).join('; ');
+  const proyectosEmpList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`#${p.num} "${p.nombre}" cliente:"${p.cliente}" valor:$${p.valor} estado:${p.estado}`).join('; ');
+  const cobrosEmpList = S.cobros.filter(c=>(c.empresa?c.empresa===ACTIVE_COMPANY:true)).map(c=>`Proyecto #${c.num} — $${c.monto} — ${c.estado} — ${c.fecha||''}`).join('; ');
   const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
 Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
 Clientes/direcciones guardadas: ${savedLocs || '(ninguna guardada aún)'}
-Proyectos actuales (num, nombre, cliente) para hacer match cuando llegue un comprobante de pago: ${proyectosEmpList || '(sin proyectos)'}
-Últimas facturas, ordenadas de la MÁS RECIENTE a la más antigua (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes — la primera que coincida con el cliente mencionado es la más reciente de ese cliente):
+Proyectos actuales (todos, con num, nombre, cliente, valor, estado) para hacer match cuando llegue un comprobante de pago o se pida registrar algo: ${proyectosEmpList || '(sin proyectos)'}
+Cobros/pagos ya registrados (todos, para saber qué ya está pagado y no duplicar): ${cobrosEmpList || '(sin cobros registrados aún)'}
+Todas las facturas históricas, ordenadas de la MÁS RECIENTE a la más antigua (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes — la primera que coincida con el cliente mencionado es la más reciente de ese cliente):
 ${recentInvoices || '(sin facturas aún)'}
 Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project de inmediato, sin hacer preguntas innecesarias. Reglas para decidir con la información disponible en vez de preguntar:
 - Si el usuario menciona un cliente (ej. "Acqualina") y dice "lo mismo", "similar", "como el anterior", o no da más detalle: busca en la lista de "Últimas facturas" de arriba la más reciente que sea de ese mismo cliente, y úsala completa como plantilla (mismo precio, misma descripción, mismos ítems) — NO preguntes cuál factura anterior usar, asume que es la más reciente de ese cliente.
@@ -2139,10 +2424,12 @@ Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las 
 - Después de crear la factura, resume en una sola frase corta qué hiciste (cliente, monto, qué cambiaste) — no listes preguntas ya respondidas.
 Cuando el usuario pida registrar un gasto, un pago de nómina/jornal a un empleado, usa register_gasto / register_nomina respectivamente. Siempre identifica a qué número de proyecto corresponde antes de usar estas herramientas (a menos que el usuario diga explícitamente que es un gasto general sin proyecto). Si no es claro a qué proyecto pertenece, pregunta antes de registrar nada.
 Si el usuario adjunta una imagen de un comprobante de pago/wire transfer/transferencia, lee el monto, la fecha, y el nombre del remitente/cliente de la imagen. Trata de identificar a qué proyecto de la lista de arriba corresponde (por nombre del cliente o del edificio). Usa la herramienta register_cobro para registrarlo. Si no logras identificar con certeza a qué proyecto pertenece, pregúntale al usuario cuál es antes de registrar nada — nunca adivines el proyecto si hay ambigüedad.
+Si el usuario adjunta un archivo Excel/CSV (verás sus filas listadas como "Fila N: columna=valor, ..."), analiza qué tipo de datos son (proyectos, facturas, gastos, nómina, pagos/cobros) según los nombres de columna y su contenido. Luego, para CADA fila que tenga datos suficientes, llama a la herramienta correspondiente (create_project, create_invoice, register_gasto, register_nomina, o register_cobro) UNA VEZ POR FILA — puedes y debes llamar herramientas muchas veces seguidas en el mismo turno para procesar todas las filas, no te detengas después de la primera. Si una fila no tiene datos suficientes o es ambigua (ej. no se puede identificar el proyecto), sáltala y menciónalo al final en tu resumen, no te detengas a preguntar por cada fila individual — solo pregunta si TODO el archivo es ambiguo sobre qué tipo de datos contiene. Al terminar, da un resumen breve: cuántas filas procesaste con éxito y cuántas tuviste que saltar y por qué.
 Responde en español, conciso y directo.`;
   const proyList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`${p.num}:${p.estado}:${p.inicio||'?'}`).join(', ');
+  const finalMessage = xls ? `${text||'Importa este archivo y registra lo que corresponda.'}\n\n--- ARCHIVO ADJUNTO: ${xls.fileName} (${xls.rowCount} filas${xls.cappedCount<xls.rowCount?', mostrando las primeras '+xls.cappedCount:''}) ---\n${xls.rowsText}` : (text || '(imagen adjunta, sin texto)');
   try {
-    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:text||'(imagen adjunta, sin texto)',image:img,proyectos:proyList,empresa:ACTIVE_COMPANY})});
+    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:finalMessage,image:img,proyectos:proyList,empresa:ACTIVE_COMPANY})});
     const d = await r.json();
     const reply = d.reply || d.content?.[0]?.text || 'No pude procesar la respuesta.';
     document.getElementById('lmsg').remove();
