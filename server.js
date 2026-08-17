@@ -15,7 +15,7 @@ const PWD=process.env.APP_PASSWORD||'16720419Brh!',ARLENE_PWD=process.env.ARLENE
 // fresh deploy will reset to the seed data below. Recommended: add a Disk and set DATA_DIR=/data.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'bhpro-data.json');
-let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],deletedIds:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
+let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
 function loadFromDisk(){
   try{
     if(fs.existsSync(DATA_FILE)){
@@ -81,10 +81,10 @@ app.post('/api/logout',(q,r)=>{clearAuthCookie(r);r.json({success:true});});
 app.get('/api/auth-check',(q,r)=>{const role=verifyAuthCookie(q.headers.cookie);r.json({authenticated:!!role,role:role||null,arleneAccessEnabled:!!D.arlene_access_enabled});});
 app.post('/api/arlene-access',adminAuth,(q,r)=>{D.arlene_access_enabled=!!q.body.enabled;saveToDisk();r.json({success:true,enabled:D.arlene_access_enabled});});
 app.get('/api/data',auth,(q,r)=>r.json(D));
-app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k].filter(item=>!D.deletedIds.includes(item.id));});D._seeded=true;saveToDisk();r.json({success:true});});
+app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k].filter(item=>!D.deletedIds.includes(item.id));});D._seeded=true;saveToDisk();r.json({success:true});});
 app.post('/api/data/delete-item',auth,(q,r)=>{
   const {key,id}=q.body;
-  const validKeys=['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion'];
+  const validKeys=['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'];
   if(!validKeys.includes(key)||!id)return r.status(400).json({success:false,message:'Invalid key or id'});
   D[key]=D[key].filter(item=>item.id!==id);
   if(!D.deletedIds.includes(id))D.deletedIds.push(id);
@@ -144,7 +144,7 @@ const kratosLogoData = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAZAAAAEaCAIAAACw9pYl
 doc.image(isKratos ? kratosLogoData : logoData, 50, 36, isKratos ? {width:90,height:64} : {width:70,height:70});
 // Company info next to logo
 const companyInfo = isKratos
-  ? {name:'KRATOS ELITE COATINGS LLC', addr1: inv.companyAddr1||'Miami, FL', addr2: inv.companyAddr2||'(786) 115-8720', email: inv.companyEmail||'KRATOSELITECOATINGS@GMAIL.COM'}
+  ? {name:'KRATOS ELITE COATINGS LLC', addr1: inv.companyAddr1||'10658 Boca Entrada Blvd', addr2: inv.companyAddr2||'Boca Raton, FL 33428 · (305) 333-5152', email: inv.companyEmail||'KRATOSELITECOATINGS@GMAIL.COM'}
   : {name:'BH PRO SERVICES LLC', addr1:'2001 HOLLYWOOD BLVD', addr2:'HOLLYWOOD FL 33020', email:'INFO@BHPROSERVICES.COM'};
 const infoX = isKratos ? 150 : 130;
 doc.fontSize(isKratos?9.5:11).fillColor(d).font('Helvetica-Bold').text(companyInfo.name,infoX,50,{width:180}).font('Helvetica').fontSize(9).fillColor(g).text(companyInfo.addr1,infoX,isKratos?66:64).text(companyInfo.addr2,infoX,isKratos?78:76).text(companyInfo.email,infoX,isKratos?90:88);
@@ -328,7 +328,7 @@ function executeAiTool(toolName, input, empresa) {
     }
     if (toolName === 'register_cobro') {
       const { proyectoNum, monto, fecha, notas } = input;
-      if (!proyectoNum || monto === undefined) return { resultMsg: 'Error: faltan datos (proyectoNum o monto) para registrar el cobro.', changed: false };
+      if (!proyectoNum || monto === undefined || !monto) return { resultMsg: 'Error: faltan datos o el monto es cero (proyectoNum o monto) para registrar el cobro.', changed: false };
       const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
       if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
       D.cobros.push({
