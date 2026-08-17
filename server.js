@@ -580,6 +580,7 @@ app.post('/api/claude', auth, async (q, r) => {
     let dataChanged = false;
     let changedCount = 0;
     let loopGuard = 0;
+    const allResultMsgs = []; // keeps a plain-language log of every action taken, as a fallback summary
     const MAX_TOOL_ITERATIONS = 60;
     while (data.stop_reason === 'tool_use' && Array.isArray(data.content) && loopGuard < MAX_TOOL_ITERATIONS) {
       loopGuard++;
@@ -589,6 +590,7 @@ app.post('/api/claude', auth, async (q, r) => {
       const toolResults = toolUseBlocks.map(toolUse => {
         const { resultMsg, changed } = executeAiTool(toolUse.name, toolUse.input, empresa);
         if (changed) { dataChanged = true; changedCount++; }
+        allResultMsgs.push(resultMsg);
         return { type: 'tool_result', tool_use_id: toolUse.id, content: resultMsg };
       });
       messages.push({ role: 'user', content: toolResults });
@@ -601,6 +603,14 @@ app.post('/api/claude', auth, async (q, r) => {
     }
 
     const textBlock = Array.isArray(data.content) ? data.content.find(b => b.type === 'text') : null;
-    r.json({ reply: textBlock?.text || data.content?.[0]?.text || 'Sin respuesta', dataChanged, changedCount });
+    // Fallback: if the model finished without giving a text summary (rare, but happens), build one
+    // ourselves from what was actually done, instead of showing an unhelpful blank/placeholder reply.
+    let reply = textBlock?.text || data.content?.[0]?.text;
+    if (!reply) {
+      reply = allResultMsgs.length
+        ? `✅ Listo:\n` + allResultMsgs.map(m => `• ${m}`).join('\n')
+        : 'No pude generar una respuesta esta vez — intenta de nuevo, o si estabas registrando varias cosas, revisa la lista para confirmar si ya quedaron guardadas antes de repetir.';
+    }
+    r.json({ reply, dataChanged, changedCount });
   } catch (e) { r.json({ reply: 'Error: ' + e.message }); }
 });
