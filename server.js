@@ -449,7 +449,7 @@ function executeAiTool(toolName, input, empresa) {
 
 app.post('/api/claude', auth, async (q, r) => {
   try {
-    const { system, message, proyectos, empresa, image } = q.body;
+    const { system, message, proyectos, empresa, image, history } = q.body;
     const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_KEY) return r.json({ reply: 'API key no configurada. Agrega ANTHROPIC_API_KEY en Render.' });
 
@@ -560,7 +560,12 @@ app.post('/api/claude', auth, async (q, r) => {
           { type: 'text', text: message }
         ]
       : message;
-    const messages = [{ role: 'user', content: userContent }];
+    // Prepend prior turns from this chat session (sanitized) so follow-up questions like
+    // "¿y esos corresponden al valor correcto?" are understood in context, not as a fresh topic.
+    const sanitizedHistory = Array.isArray(history)
+      ? history.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-40)
+      : [];
+    const messages = [...sanitizedHistory, { role: 'user', content: userContent }];
     let res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
