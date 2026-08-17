@@ -270,6 +270,119 @@ app.get('*',(q,r)=>{
 app.listen(PORT,()=>console.log(`BH Pro running on port ${PORT}`));
 
 // CLAUDE AI ENDPOINT
+// Executes a single tool call and returns { resultMsg, changed }. Used inside the agentic loop
+// in /api/claude so Claude can call tools repeatedly in one turn (e.g. registering 20 rows from
+// an imported Excel file), not just once.
+function executeAiTool(toolName, input, empresa) {
+  const emp = empresa || 'BH Pro';
+  input = input || {};
+  try {
+    if (toolName === 'update_project_status') {
+      const { nums, estado } = input;
+      const updated = [];
+      (nums||[]).forEach(n => {
+        const p = D.proyectos.find(pr => pr.num === n && (pr.empresa||'BH Pro') === emp);
+        if (p) { p.estado = estado; updated.push(n); }
+      });
+      if (updated.length) saveToDisk();
+      return { resultMsg: `Se actualizaron ${updated.length} proyecto(s) a estado "${estado}": ${updated.join(', ')||'(ninguno encontrado)'}.`, changed: updated.length > 0 };
+    }
+    if (toolName === 'create_invoice') {
+      const { billTo, projectName, items } = input;
+      if (!billTo || !Array.isArray(items) || !items.length) return { resultMsg: 'Error: faltan datos (billTo o items) para crear la factura.', changed: false };
+      const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
+      const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
+      const nums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
+      const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
+      const nextNum = (Math.max(0, ...nums, ...proyNums) + 1).toString();
+      const cleanItems = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
+      const total = cleanItems.reduce((s,it)=>s+(it.qty*it.rate),0);
+      const todayISO = new Date().toISOString().slice(0,10);
+      D.facturas.push({
+        id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        number: nextNum, empresa: emp, date: todayISO, dueDate: todayISO,
+        billTo, shipTo: billTo, amount: total, items: cleanItems,
+        item: projectName || cleanItems[0]?.desc || '', projectName: projectName || cleanItems[0]?.desc || '',
+        note: '', sent: false
+      });
+      saveToDisk();
+      return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`, changed: true };
+    }
+    if (toolName === 'create_project') {
+      const { nombre, cliente, valor, loc, estado } = input;
+      if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
+      const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
+      const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
+      const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
+      const facNums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
+      const nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
+      D.proyectos.push({
+        id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        num: nextNum, nombre, cliente, valor: valor||0,
+        inicio: new Date().toISOString().slice(0,10), fin: '',
+        estado: estado || 'Activo', notas: '', loc: loc||'', empresa: emp,
+        pedroPct: 0
+      });
+      saveToDisk();
+      return { resultMsg: `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`, changed: true };
+    }
+    if (toolName === 'register_cobro') {
+      const { proyectoNum, monto, fecha, notas } = input;
+      if (!proyectoNum || monto === undefined) return { resultMsg: 'Error: faltan datos (proyectoNum o monto) para registrar el cobro.', changed: false };
+      const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
+      if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
+      D.cobros.push({
+        id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        num: proyectoNum, cliente: proj.cliente||'', monto: monto||0,
+        fecha: fecha || new Date().toISOString().slice(0,10),
+        estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: '',
+        fpago: fecha || new Date().toISOString().slice(0,10), empresa: emp,
+        notas: notas || 'Registrado por asistente'
+      });
+      saveToDisk();
+      return { resultMsg: `Cobro de $${(monto||0).toFixed(2)} registrado para el proyecto #${proyectoNum} "${proj.nombre}". Ya está guardado en Cobros.`, changed: true };
+    }
+    if (toolName === 'register_gasto') {
+      const { proyectoNum, categoria, monto, descripcion } = input;
+      if (monto === undefined || !descripcion) return { resultMsg: 'Error: faltan datos (monto o descripcion) para registrar el gasto.', changed: false };
+      let proj = null;
+      if (proyectoNum) {
+        proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
+        if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
+      }
+      D.gastos.push({
+        id: 'gas_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        fecha: new Date().toISOString().slice(0,10),
+        proy: proyectoNum || '', cat: categoria || 'Otros', monto: monto||0,
+        desc: descripcion, recibo: '', foto: '', empresa: emp
+      });
+      saveToDisk();
+      return { resultMsg: proyectoNum
+        ? `Gasto de $${(monto||0).toFixed(2)} ("${descripcion}") registrado para el proyecto #${proyectoNum} "${proj.nombre}".`
+        : `Gasto general de $${(monto||0).toFixed(2)} ("${descripcion}") registrado sin ligar a ningún proyecto.`, changed: true };
+    }
+    if (toolName === 'register_nomina') {
+      const { proyectoNum, empleado, horas, tarifa, total } = input;
+      if (!proyectoNum || !empleado) return { resultMsg: 'Error: faltan datos (proyectoNum o empleado) para registrar la nómina.', changed: false };
+      const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
+      if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
+      const h = horas || 1;
+      const t = tarifa || 0;
+      const tot = total !== undefined ? total : (h * t);
+      D.nomina.push({
+        id: 'nom_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        fecha: new Date().toISOString().slice(0,10),
+        proy: proyectoNum, empleado, horas: h, tarifa: t, total: tot, notas: ''
+      });
+      saveToDisk();
+      return { resultMsg: `Pago de nómina registrado: ${empleado}, $${tot.toFixed(2)}, proyecto #${proyectoNum} "${proj.nombre}".`, changed: true };
+    }
+    return { resultMsg: `Error: herramienta desconocida "${toolName}".`, changed: false };
+  } catch (e) {
+    return { resultMsg: `Error ejecutando ${toolName}: ${e.message}`, changed: false };
+  }
+}
+
 app.post('/api/claude', auth, async (q, r) => {
   try {
     const { system, message, proyectos, empresa, image } = q.body;
@@ -387,196 +500,35 @@ app.post('/api/claude', auth, async (q, r) => {
     let res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 800, system: fullSystem, messages, tools })
     });
     let data = await res.json();
 
+    // Agentic loop: keep executing tool calls and feeding results back until Claude stops
+    // asking for tools (or we hit a safety cap). This lets one message — e.g. "importa este
+    // Excel" — trigger many registrations in a row (one project/invoice/gasto per row), not
+    // just a single action.
     let dataChanged = false;
     let changedCount = 0;
-
-    // If Claude wants to use the tool, execute it and continue the conversation
-    if (data.stop_reason === 'tool_use' && Array.isArray(data.content)) {
-      const toolUse = data.content.find(b => b.type === 'tool_use');
-      if (toolUse && toolUse.name === 'update_project_status') {
-        const { nums, estado } = toolUse.input || {};
-        let updated = [];
-        if (Array.isArray(nums) && estado) {
-          D.proyectos.forEach(p => {
-            if (nums.includes(p.num) && (!empresa || (p.empresa||'BH Pro') === empresa)) {
-              p.estado = estado;
-              updated.push(p.num);
-            }
-          });
-          if (updated.length) { saveToDisk(); dataChanged = true; changedCount = updated.length; }
-        }
-        messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: `Se actualizaron ${updated.length} proyecto(s) a estado "${estado}": ${updated.join(', ')||'(ninguno encontrado)'}.` }] });
-        res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
-        });
-        data = await res.json();
-      } else if (toolUse && toolUse.name === 'create_invoice') {
-        const { billTo, projectName, items } = toolUse.input || {};
-        const emp = empresa || 'BH Pro';
-        let toolResultMsg;
-        if (!billTo || !Array.isArray(items) || !items.length) {
-          toolResultMsg = 'Error: faltan datos (billTo o items) para crear la factura.';
-        } else {
-          const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
-          const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
-          const nums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
-          const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
-          const nextNum = (Math.max(0, ...nums, ...proyNums) + 1).toString();
-          const cleanItems = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
-          const total = cleanItems.reduce((s,it)=>s+(it.qty*it.rate),0);
-          const todayISO = new Date().toISOString().slice(0,10);
-          const newInvoice = {
-            id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-            number: nextNum, empresa: emp, date: todayISO, dueDate: todayISO,
-            billTo, shipTo: billTo, amount: total, items: cleanItems,
-            item: projectName || cleanItems[0]?.desc || '', projectName: projectName || cleanItems[0]?.desc || '',
-            note: '', sent: false
-          };
-          D.facturas.push(newInvoice);
-          saveToDisk(); dataChanged = true; changedCount = 1;
-          toolResultMsg = `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`;
-        }
-        messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
-        res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
-        });
-        data = await res.json();
-      } else if (toolUse && toolUse.name === 'create_project') {
-        const { nombre, cliente, valor, loc, estado } = toolUse.input || {};
-        const emp = empresa || 'BH Pro';
-        let toolResultMsg;
-        if (!nombre || !cliente || valor === undefined) {
-          toolResultMsg = 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.';
-        } else {
-          const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
-          const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
-          const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
-          const facNums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
-          const nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
-          const newProject = {
-            id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-            num: nextNum, nombre, cliente, valor: valor||0,
-            inicio: new Date().toISOString().slice(0,10), fin: '',
-            estado: estado || 'Activo', notas: '', loc: loc||'', empresa: emp,
-            pedroPct: 0
-          };
-          D.proyectos.push(newProject);
-          saveToDisk(); dataChanged = true; changedCount = 1;
-          toolResultMsg = `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`;
-        }
-        messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
-        res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
-        });
-        data = await res.json();
-      } else if (toolUse && toolUse.name === 'register_cobro') {
-        const { proyectoNum, monto, fecha, notas } = toolUse.input || {};
-        const emp = empresa || 'BH Pro';
-        let toolResultMsg;
-        const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
-        if (!proyectoNum || monto === undefined) {
-          toolResultMsg = 'Error: faltan datos (proyectoNum o monto) para registrar el cobro.';
-        } else if (!proj) {
-          toolResultMsg = `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`;
-        } else {
-          const newCobro = {
-            id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-            num: proyectoNum, cliente: proj.cliente||'', monto: monto||0,
-            fecha: fecha || new Date().toISOString().slice(0,10),
-            estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: '',
-            fpago: fecha || new Date().toISOString().slice(0,10), empresa: emp,
-            notas: notas || 'Registrado por asistente desde comprobante de pago'
-          };
-          D.cobros.push(newCobro);
-          saveToDisk(); dataChanged = true; changedCount = 1;
-          toolResultMsg = `Cobro de $${(monto||0).toFixed(2)} registrado para el proyecto #${proyectoNum} "${proj.nombre}". Ya está guardado en Cobros.`;
-        }
-        messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
-        res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
-        });
-        data = await res.json();
-      } else if (toolUse && toolUse.name === 'register_gasto') {
-        const { proyectoNum, categoria, monto, descripcion } = toolUse.input || {};
-        const emp = empresa || 'BH Pro';
-        let toolResultMsg;
-        if (monto === undefined || !descripcion) {
-          toolResultMsg = 'Error: faltan datos (monto o descripcion) para registrar el gasto.';
-        } else {
-          let proj = null;
-          if (proyectoNum) {
-            proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
-            if (!proj) toolResultMsg = `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`;
-          }
-          if (!proyectoNum || proj) {
-            const newGasto = {
-              id: 'gas_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-              fecha: new Date().toISOString().slice(0,10),
-              proy: proyectoNum || '', cat: categoria || 'Otros', monto: monto||0,
-              desc: descripcion, recibo: '', foto: '', empresa: emp
-            };
-            D.gastos.push(newGasto);
-            saveToDisk(); dataChanged = true; changedCount = 1;
-            toolResultMsg = proyectoNum
-              ? `Gasto de $${(monto||0).toFixed(2)} ("${descripcion}") registrado para el proyecto #${proyectoNum} "${proj.nombre}".`
-              : `Gasto general de $${(monto||0).toFixed(2)} ("${descripcion}") registrado sin ligar a ningún proyecto.`;
-          }
-        }
-        messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
-        res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
-        });
-        data = await res.json();
-      } else if (toolUse && toolUse.name === 'register_nomina') {
-        const { proyectoNum, empleado, horas, tarifa, total } = toolUse.input || {};
-        const emp = empresa || 'BH Pro';
-        let toolResultMsg;
-        const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
-        if (!proyectoNum || !empleado) {
-          toolResultMsg = 'Error: faltan datos (proyectoNum o empleado) para registrar la nómina.';
-        } else if (!proj) {
-          toolResultMsg = `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`;
-        } else {
-          const h = horas || 1;
-          const t = tarifa || 0;
-          const tot = total !== undefined ? total : (h * t);
-          const newNomina = {
-            id: 'nom_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-            fecha: new Date().toISOString().slice(0,10),
-            proy: proyectoNum, empleado, horas: h, tarifa: t, total: tot, notas: ''
-          };
-          D.nomina.push(newNomina);
-          saveToDisk(); dataChanged = true; changedCount = 1;
-          toolResultMsg = `Pago de nómina registrado: ${empleado}, $${tot.toFixed(2)}, proyecto #${proyectoNum} "${proj.nombre}".`;
-        }
-        messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultMsg }] });
-        res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: fullSystem, messages, tools })
-        });
-        data = await res.json();
-      }
+    let loopGuard = 0;
+    const MAX_TOOL_ITERATIONS = 60;
+    while (data.stop_reason === 'tool_use' && Array.isArray(data.content) && loopGuard < MAX_TOOL_ITERATIONS) {
+      loopGuard++;
+      const toolUseBlocks = data.content.filter(b => b.type === 'tool_use');
+      if (!toolUseBlocks.length) break;
+      messages.push({ role: 'assistant', content: data.content });
+      const toolResults = toolUseBlocks.map(toolUse => {
+        const { resultMsg, changed } = executeAiTool(toolUse.name, toolUse.input, empresa);
+        if (changed) { dataChanged = true; changedCount++; }
+        return { type: 'tool_result', tool_use_id: toolUse.id, content: resultMsg };
+      });
+      messages.push({ role: 'user', content: toolResults });
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1500, system: fullSystem, messages, tools })
+      });
+      data = await res.json();
     }
 
     const textBlock = Array.isArray(data.content) ? data.content.find(b => b.type === 'text') : null;
