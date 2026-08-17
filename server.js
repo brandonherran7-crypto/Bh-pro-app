@@ -572,6 +572,10 @@ app.post('/api/claude', auth, async (q, r) => {
       body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 800, system: fullSystem, messages, tools })
     });
     let data = await res.json();
+    if (data && data.type === 'error') {
+      console.error('[Claude API error]', JSON.stringify(data.error));
+      return r.json({ reply: `⚠️ Error de la API de Claude: ${data.error?.message || 'desconocido'} (tipo: ${data.error?.type || '?'}). Revisa que ANTHROPIC_API_KEY esté bien puesta en Render.`, dataChanged: false, changedCount: 0 });
+    }
 
     // Agentic loop: keep executing tool calls and feeding results back until Claude stops
     // asking for tools (or we hit a safety cap). This lets one message — e.g. "importa este
@@ -600,6 +604,10 @@ app.post('/api/claude', auth, async (q, r) => {
         body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1500, system: fullSystem, messages, tools })
       });
       data = await res.json();
+      if (data && data.type === 'error') {
+        console.error('[Claude API error mid-loop]', JSON.stringify(data.error));
+        break; // stop the loop; fall through to the summary built from what was already done
+      }
     }
 
     const textBlock = Array.isArray(data.content) ? data.content.find(b => b.type === 'text') : null;
