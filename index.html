@@ -134,7 +134,7 @@ select option{background:var(--black-3);}
 .ma{background:var(--black-4);color:var(--white-2);align-self:flex-start;border-left:3px solid var(--gold);}
 .ml{color:var(--gray);font-style:italic;align-self:flex-start;}
 .cinput-area{padding:8px;border-top:1px solid #222;display:flex;gap:6px;}
-.cinput{flex:1;background:var(--black-4);border:1px solid #333;border-radius:6px;color:var(--white);font-family:'Montserrat',sans-serif;font-size:.72rem;padding:7px 9px;outline:none;resize:none;}
+.cinput{flex:1;background:var(--black-4);border:1px solid #333;border-radius:6px;color:var(--white);font-family:'Montserrat',sans-serif;font-size:.72rem;padding:7px 9px;outline:none;resize:none;max-height:150px;overflow-y:auto;line-height:1.4;}
 .csend{background:var(--gold);color:white;border:none;border-radius:6px;padding:7px 10px;font-size:.85rem;cursor:pointer;}
 .fab{position:fixed;bottom:16px;left:14px;background:var(--black-3);color:var(--gold);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;border:1px solid #333;z-index:99;}
 
@@ -321,7 +321,7 @@ select option{background:var(--black-3);}
     <div class="sl" data-i18n="sl.agregar_gasto">+ Agregar Gasto</div>
     <div class="fg"><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="pd-g-cat"><option>Materiales</option><option>Herramientas</option><option>Renta</option><option>Combustible</option><option>Otro</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="pd-g-monto" placeholder="0" min="0" step="0.01"></div></div>
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="pd-g-desc" placeholder="Pintura, cinta..."></div>
-    <div style="margin-bottom:8px;"><input type="file" id="pd-g-foto" accept="image/*" capture="environment"></div>
+    <div style="margin-bottom:8px;"><input type="file" id="pd-g-foto" accept="image/*"></div>
     <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="addGastoToProject()" data-i18n="btn.agregar_gasto_pd">+ Agregar Gasto</button>
     <div id="pd-gastos-list" style="max-height:140px;overflow-y:auto;margin-bottom:16px;font-size:.7rem;"></div>
 
@@ -349,7 +349,7 @@ select option{background:var(--black-3);}
     <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="g-fec"></div><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="g-pro" onfocus="populateProjectSelect('g-pro', true)"><option value="">Selecciona...</option></select></div></div>
     <div class="fg"><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="g-cat"><option>Materiales</option><option>Herramientas</option><option>Renta equipo</option><option>Transporte</option><option>Storage</option><option>Otros</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="g-mon" placeholder="0"></div></div>
     <div class="fg"><div><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="g-des" placeholder="Pintura, cinta..."></div><div><div class="fl" data-i18n="fld.recibo">Recibo</div><input type="text" id="g-rec" placeholder="Home Depot"></div></div>
-    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.foto_del_recibogasto_opcional">Foto del recibo/gasto (opcional)</div><input type="file" id="g-foto" accept="image/*" capture="environment" onchange="previewGastoFoto(this)"><div id="g-foto-preview" style="margin-top:6px;"></div></div>
+    <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.foto_del_recibogasto_opcional">Foto del recibo/gasto (opcional)</div><input type="file" id="g-foto" accept="image/*" onchange="previewGastoFoto(this)"><div id="g-foto-preview" style="margin-top:6px;"></div></div>
     <button class="btn" onclick="addGasto()" data-i18n="btn.registrar_gasto">+ Registrar Gasto</button>
   </div>
   <div class="search-bar"><span style="color:var(--gold)">🔍</span><input type="text" id="sq-g" placeholder="Buscar por proyecto, categoría..." oninput="renderGasto()"></div>
@@ -531,9 +531,9 @@ select option{background:var(--black-3);}
     <div class="cmsgs" id="cmsgs"><div class="msg ma" data-i18n="chat.greeting">Hola Brandon! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?</div></div>
     <div id="cimg-preview" style="display:none;padding:6px 10px 0;position:relative;"><img id="cimg-preview-img" style="max-height:70px;border-radius:6px;border:1px solid #2a4d80;"><button onclick="clearChatImage()" style="position:absolute;top:2px;left:calc(6px + 70px * 0.75);background:#E74C3C;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;">✕</button></div>
     <div id="cxls-preview" style="display:none;padding:6px 10px 0;"><span style="background:#1B3A6B;color:var(--gold);padding:4px 10px;border-radius:6px;font-size:.7rem;">📊 <span id="cxls-preview-name"></span> <button onclick="clearChatExcel()" style="background:none;border:none;color:#E74C3C;cursor:pointer;font-weight:bold;">✕</button></span></div>
-    <input type="file" id="cimg-input" accept="image/*" capture="environment" style="display:none;" onchange="handleChatImageSelect(event)">
+    <input type="file" id="cimg-input" accept="image/*" style="display:none;" onchange="handleChatImageSelect(event)">
     <input type="file" id="cxls-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleChatExcelSelect(event)">
-    <div class="cinput-area"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cxls-input').click()" style="background:#1B6B3A;margin-right:4px;" title="Adjuntar Excel/CSV">📊</button><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto de comprobante">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
+    <div class="cinput-area" style="align-items:flex-end;"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cxls-input').click()" style="background:#1B6B3A;margin-right:4px;" title="Adjuntar Excel/CSV">📊</button><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto de comprobante">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
   </div>
   <button class="cbtn" onclick="toggleClaude()">🤖</button>
 </div>
@@ -2297,6 +2297,11 @@ function exportCSV() {
 // ===== CLAUDE =====
 function toggleClaude() { document.getElementById('cpanel').classList.toggle('open'); }
 
+function autoGrowChatInput(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+}
+
 // ===== IMAGE ATTACHMENT (e.g. wire transfer / payment screenshot) =====
 let PENDING_CHAT_IMAGE = null; // { base64, mediaType }
 function handleChatImageSelect(event) {
@@ -2389,6 +2394,7 @@ async function sendClaude() {
   const xls = PENDING_CHAT_EXCEL;
   if (!text && !img && !xls) return;
   inp.value = '';
+  inp.style.height = 'auto';
   const msgs = document.getElementById('cmsgs');
   let userBubble = '';
   if (img) userBubble += `<img src="data:${img.mediaType};base64,${img.base64}" style="max-width:180px;border-radius:8px;display:block;margin-bottom:6px;">`;
@@ -2423,7 +2429,11 @@ Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las 
 - Solo pregunta si de verdad no hay ninguna factura anterior de ese cliente en la lista (osea no tienes ninguna plantilla de la cual partir) Y el usuario tampoco dio un precio — en ese caso sí pregunta el precio, nada más.
 - Después de crear la factura, resume en una sola frase corta qué hiciste (cliente, monto, qué cambiaste) — no listes preguntas ya respondidas.
 Cuando el usuario pida registrar un gasto, un pago de nómina/jornal a un empleado, usa register_gasto / register_nomina respectivamente. Siempre identifica a qué número de proyecto corresponde antes de usar estas herramientas (a menos que el usuario diga explícitamente que es un gasto general sin proyecto). Si no es claro a qué proyecto pertenece, pregunta antes de registrar nada.
-Si el usuario adjunta una imagen de un comprobante de pago/wire transfer/transferencia, lee el monto, la fecha, y el nombre del remitente/cliente de la imagen. Trata de identificar a qué proyecto de la lista de arriba corresponde (por nombre del cliente o del edificio). Usa la herramienta register_cobro para registrarlo. Si no logras identificar con certeza a qué proyecto pertenece, pregúntale al usuario cuál es antes de registrar nada — nunca adivines el proyecto si hay ambigüedad.
+Si el usuario adjunta una imagen, primero identifica qué tipo de documento es:
+- Comprobante de pago/wire transfer/transferencia recibida: lee el monto, la fecha, y el remitente/cliente. Identifica a qué proyecto corresponde (por nombre del cliente o edificio) y usa register_cobro. Si no logras identificar con certeza el proyecto, pregunta antes de registrar nada.
+- Factura o recibo de un proveedor (ej. Home Depot, Sherwin Williams, alquiler de equipo): lee el monto, qué se compró, y la fecha. Identifica a qué proyecto corresponde si es posible (por contexto de la conversación o porque el usuario lo menciona) y usa register_gasto. Si no está claro a qué proyecto pertenece, pregunta, o si el usuario indica que es un gasto general, regístralo sin proyecto.
+- Una factura que TÚ (BH Pro/Kratos) emitiste antes (ej. el usuario la foto/screenshot como referencia para hacer una nueva parecida): úsala como plantilla si el usuario pide crear una factura similar, igual que harías con el historial de texto.
+Si la imagen no es clara o no puedes determinar con confianza qué tipo de documento es, dile al usuario qué ves y pregunta qué quiere que hagas — nunca adivines el proyecto o el tipo de registro si hay ambigüedad real.
 Si el usuario adjunta un archivo Excel/CSV (verás sus filas listadas como "Fila N: columna=valor, ..."), analiza qué tipo de datos son (proyectos, facturas, gastos, nómina, pagos/cobros) según los nombres de columna y su contenido. Luego, para CADA fila que tenga datos suficientes, llama a la herramienta correspondiente (create_project, create_invoice, register_gasto, register_nomina, o register_cobro) UNA VEZ POR FILA — puedes y debes llamar herramientas muchas veces seguidas en el mismo turno para procesar todas las filas, no te detengas después de la primera. Si una fila no tiene datos suficientes o es ambigua (ej. no se puede identificar el proyecto), sáltala y menciónalo al final en tu resumen, no te detengas a preguntar por cada fila individual — solo pregunta si TODO el archivo es ambiguo sobre qué tipo de datos contiene. Al terminar, da un resumen breve: cuántas filas procesaste con éxito y cuántas tuviste que saltar y por qué.
 Responde en español, conciso y directo.`;
   const proyList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`${p.num}:${p.estado}:${p.inicio||'?'}`).join(', ');
