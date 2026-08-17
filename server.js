@@ -15,6 +15,10 @@ const PWD=process.env.APP_PASSWORD||'16720419Brh!',ARLENE_PWD=process.env.ARLENE
 // fresh deploy will reset to the seed data below. Recommended: add a Disk and set DATA_DIR=/data.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'bhpro-data.json');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const MAX_BACKUPS = 30; // keep the last 30 automatic backups (rolling window)
+const MIN_BACKUP_INTERVAL_MS = 3 * 60 * 1000; // don't backup more than once every 3 minutes
+let lastBackupAt = 0;
 let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
 function loadFromDisk(){
   try{
@@ -29,12 +33,40 @@ function loadFromDisk(){
     }
   }catch(e){ console.error('Error loading data file:', e.message); }
 }
+function ensureBackupDir(){
+  try{ if(!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, {recursive:true}); }catch(e){ console.error('Could not create backup dir:', e.message); }
+}
+// Writes a timestamped snapshot to BACKUP_DIR (throttled to at most once every MIN_BACKUP_INTERVAL_MS)
+// and prunes old backups beyond MAX_BACKUPS. This gives us a safety net: if the main data file is ever
+// ever lost, corrupted, or unexpectedly reset (e.g. around a deploy), we can restore from a recent
+// backup instead of falling all the way back to the old baked-in reference data.
+function maybeWriteBackup(){
+  try{
+    const now = Date.now();
+    if (now - lastBackupAt < MIN_BACKUP_INTERVAL_MS) return;
+    lastBackupAt = now;
+    ensureBackupDir();
+    const stamp = new Date(now).toISOString().replace(/[:.]/g,'-');
+    const backupFile = path.join(BACKUP_DIR, `bhpro-data-${stamp}.json`);
+    fs.writeFileSync(backupFile, JSON.stringify(D), 'utf8');
+    // Prune: keep only the most recent MAX_BACKUPS files
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('bhpro-data-') && f.endsWith('.json')).sort();
+    while (files.length > MAX_BACKUPS) {
+      const oldest = files.shift();
+      try{ fs.unlinkSync(path.join(BACKUP_DIR, oldest)); }catch(e){}
+    }
+  }catch(e){ console.error('Error writing backup:', e.message); }
+}
 function saveToDisk(){
   try{
     fs.writeFileSync(DATA_FILE, JSON.stringify(D), 'utf8');
+    maybeWriteBackup();
   }catch(e){ console.error('Error saving data file:', e.message); }
 }
 loadFromDisk();
+ensureBackupDir();
+lastBackupAt = 0; // force an immediate backup right after boot, ignoring the throttle
+maybeWriteBackup();
 const pc=new PlaidApi(new Configuration({basePath:PlaidEnvironments[ENV],baseOptions:{headers:{'PLAID-CLIENT-ID':CID,'PLAID-SECRET':SEC}}}));
 
 // ===== AUTH (stateless, signed cookie) =====
@@ -81,6 +113,38 @@ app.post('/api/logout',(q,r)=>{clearAuthCookie(r);r.json({success:true});});
 app.get('/api/auth-check',(q,r)=>{const role=verifyAuthCookie(q.headers.cookie);r.json({authenticated:!!role,role:role||null,arleneAccessEnabled:!!D.arlene_access_enabled});});
 app.post('/api/arlene-access',adminAuth,(q,r)=>{D.arlene_access_enabled=!!q.body.enabled;saveToDisk();r.json({success:true,enabled:D.arlene_access_enabled});});
 app.get('/api/data',auth,(q,r)=>r.json(D));
+// Lists available automatic backups (most recent first), so the app owner can see how far back
+// safety-net data exists, without needing SSH/console access to the server.
+app.get('/api/data/backups',adminAuth,(q,r)=>{
+  try{
+    ensureBackupDir();
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('bhpro-data-') && f.endsWith('.json')).sort().reverse();
+    const list = files.map(f => {
+      const stamp = f.replace('bhpro-data-','').replace('.json','');
+      let proyectosCount = 0;
+      try{ const parsed = JSON.parse(fs.readFileSync(path.join(BACKUP_DIR,f),'utf8')); proyectosCount = (parsed.proyectos||[]).length; }catch(e){}
+      return { file: f, timestamp: stamp, proyectosCount };
+    });
+    r.json({ backups: list });
+  }catch(e){ r.status(500).json({ error: e.message }); }
+});
+// Restores D from a specific backup file (admin-only, requires exact filename from the list above).
+// This is the safety net if the main data file is ever lost/reset unexpectedly.
+app.post('/api/data/restore-backup',adminAuth,(q,r)=>{
+  try{
+    const { file } = q.body;
+    if (!file || !file.startsWith('bhpro-data-') || !file.endsWith('.json') || file.includes('..') || file.includes('/')) {
+      return r.status(400).json({ success:false, message: 'Nombre de archivo de respaldo inválido.' });
+    }
+    const backupPath = path.join(BACKUP_DIR, file);
+    if (!fs.existsSync(backupPath)) return r.status(404).json({ success:false, message: 'Ese respaldo no existe.' });
+    const raw = fs.readFileSync(backupPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    D = Object.assign({proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],plaid_access_token:null,_seeded:true,arlene_access_enabled:true}, parsed);
+    saveToDisk();
+    r.json({ success:true, proyectosCount: (D.proyectos||[]).length });
+  }catch(e){ r.status(500).json({ success:false, message: e.message }); }
+});
 app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k].filter(item=>!D.deletedIds.includes(item.id));});D._seeded=true;saveToDisk();r.json({success:true});});
 app.post('/api/data/delete-item',auth,(q,r)=>{
   const {key,id}=q.body;
