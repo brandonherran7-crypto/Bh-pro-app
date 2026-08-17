@@ -2568,6 +2568,7 @@ function toggleVoiceInput() {
   VOICE_RECOGNITION.start();
 }
 
+let CLAUDE_CHAT_HISTORY = []; // keeps this session's conversation so the assistant remembers earlier turns
 async function sendClaude() {
   const inp = document.getElementById('cinput');
   const text = inp.value.trim();
@@ -2596,11 +2597,17 @@ async function sendClaude() {
   const savedLocs = S.locacionesFacturacion.filter(l=>(l.empresa||'BH Pro')===ACTIVE_COMPANY).map(l=>`"${l.nombre}" (dirección: ${l.direccion||'?'}, tel: ${l.telefono||'?'})`).join('; ');
   const proyectosEmpList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`#${p.num} "${p.nombre}" cliente:"${p.cliente}" valor:$${p.valor} estado:${p.estado}`).join('; ');
   const cobrosEmpList = S.cobros.filter(c=>(c.empresa?c.empresa===ACTIVE_COMPANY:true)).map(c=>`Proyecto #${c.num} — $${c.monto} — ${c.estado} — ${c.fecha||''}`).join('; ');
+  const nominaEmpList = S.nomina.filter(n=>(n.empresa?n.empresa===ACTIVE_COMPANY:true)).map(n=>`${n.fecha||'?'} — Proyecto #${n.proy||'?'} — ${n.empleado} — ${n.horas}hrs @ $${n.tarifa} — Total: $${n.total}${n.notas?` — ${n.notas}`:''}`).join('\n');
+  const gastosEmpList = S.gastos.filter(g=>(g.empresa?g.empresa===ACTIVE_COMPANY:true)).map(g=>`${g.fecha||'?'} — ${g.proy?`Proyecto #${g.proy}`:'General'} — ${g.cat} — $${g.monto}${g.desc?` — ${g.desc}`:''}`).join('\n');
   const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
 Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
 Clientes/direcciones guardadas: ${savedLocs || '(ninguna guardada aún)'}
 Proyectos actuales (todos, con num, nombre, cliente, valor, estado) para hacer match cuando llegue un comprobante de pago o se pida registrar algo: ${proyectosEmpList || '(sin proyectos)'}
 Cobros/pagos ya registrados (todos, para saber qué ya está pagado y no duplicar): ${cobrosEmpList || '(sin cobros registrados aún)'}
+Nómina/pagos a empleados registrados (todos, para responder preguntas como "cuánto le pagué a X" o "cuánto llevo pagado en un proyecto"):
+${nominaEmpList || '(sin nómina registrada aún)'}
+Gastos registrados (todos, para responder preguntas sobre materiales/gastos por proyecto):
+${gastosEmpList || '(sin gastos registrados aún)'}
 Todas las facturas históricas, ordenadas de la MÁS RECIENTE a la más antigua (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes — la primera que coincida con el cliente mencionado es la más reciente de ese cliente):
 ${recentInvoices || '(sin facturas aún)'}
 Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project de inmediato, sin hacer preguntas innecesarias. Reglas para decidir con la información disponible en vez de preguntar:
@@ -2616,15 +2623,20 @@ Si el usuario adjunta una imagen, primero identifica qué tipo de documento es:
 - Una factura que TÚ (BH Pro/Kratos) emitiste antes (ej. el usuario la foto/screenshot como referencia para hacer una nueva parecida): úsala como plantilla si el usuario pide crear una factura similar, igual que harías con el historial de texto.
 Si la imagen no es clara o no puedes determinar con confianza qué tipo de documento es, dile al usuario qué ves y pregunta qué quiere que hagas — nunca adivines el proyecto o el tipo de registro si hay ambigüedad real.
 Si el usuario adjunta un archivo Excel/CSV (verás sus filas listadas como "Fila N: columna=valor, ..."), analiza qué tipo de datos son (proyectos, facturas, gastos, nómina, pagos/cobros) según los nombres de columna y su contenido. Luego, para CADA fila que tenga datos suficientes, llama a la herramienta correspondiente (create_project, create_invoice, register_gasto, register_nomina, o register_cobro) UNA VEZ POR FILA — puedes y debes llamar herramientas muchas veces seguidas en el mismo turno para procesar todas las filas, no te detengas después de la primera. Si una fila no tiene datos suficientes o es ambigua (ej. no se puede identificar el proyecto), sáltala y menciónalo al final en tu resumen, no te detengas a preguntar por cada fila individual — solo pregunta si TODO el archivo es ambiguo sobre qué tipo de datos contiene. Al terminar, da un resumen breve: cuántas filas procesaste con éxito y cuántas tuviste que saltar y por qué.
+No todo lo que el usuario te dice es para registrar algo nuevo — muchas veces solo quiere que CONSULTES o VERIFIQUES información que ya existe, usando los datos de arriba (proyectos, facturas, cobros, nómina, gastos). Ejemplos de preguntas de consulta que debes responder directamente con los datos que ya tienes, SIN usar ninguna herramienta de registro: "¿cuánto le he pagado a Manuel en total?", "¿el proyecto #1125 ya está pagado?", "¿el monto de la factura #1125 es $700?", "¿cuánto llevo gastado en materiales del proyecto X?", "¿cuántos proyectos de Acqualina están pendientes?". Para este tipo de preguntas, busca y calcula la respuesta directamente en los datos que ya tienes arriba (sumando, filtrando, comparando) y contesta con el número o dato exacto — no preguntes más información si ya la tienes disponible arriba, y no llames a ninguna herramienta de registro para simplemente responder una pregunta.
 Responde en español, conciso y directo.`;
   const proyList = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>`${p.num}:${p.estado}:${p.inicio||'?'}`).join(', ');
   const finalMessage = xls ? `${text||'Importa este archivo y registra lo que corresponda.'}\n\n--- ARCHIVO ADJUNTO: ${xls.fileName} (${xls.rowCount} filas${xls.cappedCount<xls.rowCount?', mostrando las primeras '+xls.cappedCount:''}) ---\n${xls.rowsText}` : (text || '(imagen adjunta, sin texto)');
   try {
-    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:finalMessage,image:img,proyectos:proyList,empresa:ACTIVE_COMPANY})});
+    const r = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system:ctx,message:finalMessage,image:img,proyectos:proyList,empresa:ACTIVE_COMPANY,history:CLAUDE_CHAT_HISTORY})});
     const d = await r.json();
     const reply = d.reply || d.content?.[0]?.text || 'No pude procesar la respuesta.';
     document.getElementById('lmsg').remove();
     msgs.innerHTML += `<div class="msg ma">${reply.replace(/\n/g,'<br>')}</div>`;
+    // Remember this exchange so follow-up questions ("¿y esos corresponden a...?") keep context
+    CLAUDE_CHAT_HISTORY.push({ role: 'user', content: finalMessage });
+    CLAUDE_CHAT_HISTORY.push({ role: 'assistant', content: reply });
+    if (CLAUDE_CHAT_HISTORY.length > 40) CLAUDE_CHAT_HISTORY = CLAUDE_CHAT_HISTORY.slice(-40); // keep the chat from growing forever
     if (d.dataChanged) {
       msgs.innerHTML += `<div class="msg ma" style="color:var(--green);font-weight:600;">✅ ${tt('Listo, actualizando la app...','Done, refreshing the app...')}</div>`;
       await loadData();
