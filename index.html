@@ -257,6 +257,12 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadBackupsList()" data-i18n="btn.ver_respaldos">🔄 Ver Respaldos Disponibles</button>
     <div id="backups-list" style="font-size:.72rem;"></div>
   </div>
+  <div class="card admin-only" style="display:none;border:1px solid #FF6B6B33;">
+    <div class="card-title">💾 Diagnóstico de Persistencia (Disco)</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Revisa aquí si el disco persistente está realmente conectado y funcionando — así sabemos si los datos van a sobrevivir al próximo deploy.</p>
+    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadDataDiag()">🔍 Verificar Persistencia</button>
+    <div id="data-diag-result" style="font-size:.72rem;font-family:monospace;white-space:pre-wrap;word-break:break-word;background:#0a1628;padding:8px;border-radius:6px;"></div>
+  </div>
   <div class="card admin-only" style="display:none;border:1px solid #E74C3C33;">
     <div class="card-title" data-i18n="ct.debug_asistente">🐛 Diagnóstico del Asistente IA</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.debug_desc">Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.</p>
@@ -1804,6 +1810,41 @@ async function loadBackupsList() {
     }).join('');
   } catch(e) {
     box.innerHTML = `<span style="color:var(--red);">${tt('Error cargando respaldos','Error loading backups')}: ${e.message}</span>`;
+  }
+}
+
+async function loadDataDiag() {
+  const box = document.getElementById('data-diag-result');
+  box.textContent = tt('Verificando...','Checking...');
+  try {
+    const res = await fetch('/api/data/diag');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    const lines = [];
+    if (d.isUsingPersistentDisk) {
+      lines.push('✅ ' + tt('Usando disco persistente','Using persistent disk'));
+    } else {
+      lines.push('❌ ' + tt('NO está usando disco persistente — los datos se van a borrar en el próximo deploy','NOT using persistent disk — data WILL be wiped on the next deploy'));
+    }
+    lines.push('');
+    lines.push('DATA_DIR env var: ' + (d.envDataDirSet ? d.envDataDirValue : tt('(no configurada)','(not set)')));
+    lines.push('Carpeta usada: ' + d.resolvedDataDir);
+    lines.push('Archivo de datos: ' + d.resolvedDataFile);
+    lines.push('¿Existe el archivo?: ' + (d.dataFileExists ? tt('Sí','Yes') : tt('No','No')));
+    if (d.dataFileExists) {
+      lines.push(tt('Tamaño','Size') + ': ' + d.dataFileSize + ' bytes');
+      lines.push(tt('Última modificación','Last modified') + ': ' + new Date(d.dataFileModified).toLocaleString());
+    }
+    lines.push('¿Se puede escribir en el disco ahora mismo?: ' + (d.diskWritable ? tt('Sí','Yes') : ('❌ No — ' + (d.diskWriteError || ''))));
+    lines.push('');
+    lines.push(tt('Proyectos BH Pro cargados en memoria','BH Pro projects loaded in memory') + ': ' + d.proyectosCountBHPro);
+    lines.push(tt('Proyectos Kratos cargados en memoria','Kratos projects loaded in memory') + ': ' + d.proyectosCountKratos);
+    lines.push(tt('Facturas totales cargadas','Total invoices loaded') + ': ' + d.facturasTotal);
+    lines.push(tt('Respaldos disponibles','Available backups') + ': ' + d.backupCount);
+    lines.push(tt('Servidor iniciado a las','Server started at') + ': ' + new Date(d.serverStartedAt).toLocaleString());
+    box.textContent = lines.join('\n');
+  } catch(e) {
+    box.textContent = tt('Error verificando persistencia: ','Error checking persistence: ') + e.message;
   }
 }
 
