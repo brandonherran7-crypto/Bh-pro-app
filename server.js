@@ -447,6 +447,18 @@ function executeAiTool(toolName, input, empresa) {
   }
 }
 
+// In-memory ring buffer of recent Claude-related diagnostic log lines, so the app owner can see
+// what actually went wrong from their phone without digging through Render's log viewer.
+const CLAUDE_DEBUG_LOG = [];
+const MAX_DEBUG_LOG_LINES = 50;
+function logClaudeDebug(...args) {
+  const line = `[${new Date().toISOString()}] ` + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  CLAUDE_DEBUG_LOG.push(line);
+  while (CLAUDE_DEBUG_LOG.length > MAX_DEBUG_LOG_LINES) CLAUDE_DEBUG_LOG.shift();
+  console.log(line);
+}
+app.get('/api/claude/debug-log', adminAuth, (q, r) => r.json({ lines: CLAUDE_DEBUG_LOG }));
+
 app.post('/api/claude', auth, async (q, r) => {
   try {
     const { system, message, proyectos, empresa, image, history } = q.body;
@@ -571,10 +583,17 @@ app.post('/api/claude', auth, async (q, r) => {
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 800, system: fullSystem, messages, tools })
     });
-    let data = await res.json();
-    if (data && data.type === 'error') {
-      console.error('[Claude API error]', JSON.stringify(data.error));
-      return r.json({ reply: `⚠️ Error de la API de Claude: ${data.error?.message || 'desconocido'} (tipo: ${data.error?.type || '?'}). Revisa que ANTHROPIC_API_KEY esté bien puesta en Render.`, dataChanged: false, changedCount: 0 });
+    const rawText = await res.text();
+    logClaudeDebug('[Claude API] HTTP status:', res.status, res.ok ? 'OK' : 'NOT OK', '| body preview:', rawText.slice(0, 500));
+    let data;
+    try { data = JSON.parse(rawText); }
+    catch (parseErr) {
+      logClaudeDebug('[Claude API] Response was not valid JSON:', rawText.slice(0, 1000));
+      return r.json({ reply: `⚠️ La API de Claude respondió algo inesperado (HTTP ${res.status}). Revisa los logs del servidor en Render para más detalle.`, dataChanged: false, changedCount: 0 });
+    }
+    if (!res.ok || (data && data.type === 'error')) {
+      logClaudeDebug('[Claude API error]', 'HTTP', res.status, JSON.stringify(data.error || data));
+      return r.json({ reply: `⚠️ Error de la API de Claude (HTTP ${res.status}): ${data.error?.message || data.message || JSON.stringify(data).slice(0,200)}. Revisa ANTHROPIC_API_KEY en Render, o si tienes límite de uso alcanzado.`, dataChanged: false, changedCount: 0 });
     }
 
     // Agentic loop: keep executing tool calls and feeding results back until Claude stops
@@ -605,7 +624,7 @@ app.post('/api/claude', auth, async (q, r) => {
       });
       data = await res.json();
       if (data && data.type === 'error') {
-        console.error('[Claude API error mid-loop]', JSON.stringify(data.error));
+        logClaudeDebug('[Claude API error mid-loop]', JSON.stringify(data.error));
         break; // stop the loop; fall through to the summary built from what was already done
       }
     }
@@ -615,10 +634,14 @@ app.post('/api/claude', auth, async (q, r) => {
     // ourselves from what was actually done, instead of showing an unhelpful blank/placeholder reply.
     let reply = textBlock?.text || data.content?.[0]?.text;
     if (!reply) {
+      logClaudeDebug('[Claude] Empty reply — full last response was:', JSON.stringify(data));
       reply = allResultMsgs.length
         ? `✅ Listo:\n` + allResultMsgs.map(m => `• ${m}`).join('\n')
-        : 'No pude generar una respuesta esta vez — intenta de nuevo, o si estabas registrando varias cosas, revisa la lista para confirmar si ya quedaron guardadas antes de repetir.';
+        : `No pude generar una respuesta esta vez (stop_reason: ${data.stop_reason || '?'}, sin texto ni herramientas usadas). Revisa los logs del servidor en Render para ver la respuesta completa que dio la API. Intenta de nuevo, o si estabas registrando varias cosas, revisa la lista para confirmar si ya quedaron guardadas antes de repetir.`;
     }
     r.json({ reply, dataChanged, changedCount });
-  } catch (e) { r.json({ reply: 'Error: ' + e.message }); }
+  } catch (e) {
+    logClaudeDebug('[Claude endpoint] Uncaught error:', e.message);
+    r.json({ reply: 'Error: ' + e.message });
+  }
 });
