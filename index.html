@@ -1816,10 +1816,21 @@ async function loadBackupsList() {
 async function loadDataDiag() {
   const box = document.getElementById('data-diag-result');
   box.textContent = tt('Verificando...','Checking...');
+  let raw = '';
   try {
-    const res = await fetch('/api/data/diag');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const d = await res.json();
+    const res = await fetch('/api/data/diag', {credentials:'same-origin'});
+    raw = await res.text();
+    let d;
+    try {
+      d = JSON.parse(raw);
+    } catch (parseErr) {
+      box.textContent = tt('El servidor no devolvió datos válidos (status ','Server did not return valid data (status ') + res.status + tt('). Esto pasa si el deploy todavía no terminó, si la ruta no existe en el servidor desplegado, o si hubo un error. Respuesta cruda (primeros 400 caracteres):','). This happens if the deploy hasn\'t finished, the route doesn\'t exist on the deployed server, or an error occurred. Raw response (first 400 chars):') + '\n\n' + raw.slice(0,400);
+      return;
+    }
+    if (!res.ok) {
+      box.textContent = tt('Error del servidor (status ','Server error (status ') + res.status + '): ' + (d.error || JSON.stringify(d));
+      return;
+    }
     const lines = [];
     if (d.isUsingPersistentDisk) {
       lines.push('✅ ' + tt('Usando disco persistente','Using persistent disk'));
@@ -1833,7 +1844,7 @@ async function loadDataDiag() {
     lines.push('¿Existe el archivo?: ' + (d.dataFileExists ? tt('Sí','Yes') : tt('No','No')));
     if (d.dataFileExists) {
       lines.push(tt('Tamaño','Size') + ': ' + d.dataFileSize + ' bytes');
-      lines.push(tt('Última modificación','Last modified') + ': ' + new Date(d.dataFileModified).toLocaleString());
+      lines.push(tt('Última modificación','Last modified') + ': ' + (d.dataFileModified ? new Date(d.dataFileModified).toLocaleString() : '?'));
     }
     lines.push('¿Se puede escribir en el disco ahora mismo?: ' + (d.diskWritable ? tt('Sí','Yes') : ('❌ No — ' + (d.diskWriteError || ''))));
     lines.push('');
@@ -1841,10 +1852,10 @@ async function loadDataDiag() {
     lines.push(tt('Proyectos Kratos cargados en memoria','Kratos projects loaded in memory') + ': ' + d.proyectosCountKratos);
     lines.push(tt('Facturas totales cargadas','Total invoices loaded') + ': ' + d.facturasTotal);
     lines.push(tt('Respaldos disponibles','Available backups') + ': ' + d.backupCount);
-    lines.push(tt('Servidor iniciado a las','Server started at') + ': ' + new Date(d.serverStartedAt).toLocaleString());
+    lines.push(tt('Servidor iniciado a las','Server started at') + ': ' + (d.serverStartedAt ? new Date(d.serverStartedAt).toLocaleString() : '?'));
     box.textContent = lines.join('\n');
   } catch(e) {
-    box.textContent = tt('Error verificando persistencia: ','Error checking persistence: ') + e.message;
+    box.textContent = tt('Error de red verificando persistencia: ','Network error checking persistence: ') + (e && e.message ? e.message : String(e)) + (raw ? ('\n\n' + tt('Respuesta recibida:','Response received:') + '\n' + raw.slice(0,400)) : '');
   }
 }
 
