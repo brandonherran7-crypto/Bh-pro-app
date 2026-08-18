@@ -68,49 +68,6 @@ ensureBackupDir();
 lastBackupAt = 0; // force an immediate backup right after boot, ignoring the throttle
 maybeWriteBackup();
 const SERVER_STARTED_AT = new Date().toISOString();
-// Diagnostic endpoint: shows exactly where data is being read/written from, whether the
-// persistent disk env var is actually set, and file sizes/timestamps — so the app owner can
-// verify persistence is working correctly from inside the app, without needing Render's console.
-app.get('/api/data/diag', adminAuth, (q, r) => {
-  try {
-    const envDataDir = process.env.DATA_DIR || null;
-    let dataFileExists = false, dataFileSize = null, dataFileModified = null;
-    try {
-      const st = fs.statSync(DATA_FILE);
-      dataFileExists = true;
-      dataFileSize = st.size;
-      dataFileModified = st.mtime.toISOString();
-    } catch (e) { dataFileExists = false; }
-    let backupCount = 0, newestBackup = null;
-    try {
-      ensureBackupDir();
-      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('bhpro-data-') && f.endsWith('.json')).sort();
-      backupCount = files.length;
-      newestBackup = files.length ? files[files.length - 1] : null;
-    } catch (e) {}
-    let diskWritable = false, diskWriteError = null;
-    try {
-      const testFile = path.join(DATA_DIR, '.write-test-' + Date.now());
-      fs.writeFileSync(testFile, 'test', 'utf8');
-      fs.unlinkSync(testFile);
-      diskWritable = true;
-    } catch (e) { diskWriteError = e.message; }
-    r.json({
-      envDataDirSet: !!envDataDir,
-      envDataDirValue: envDataDir,
-      resolvedDataDir: DATA_DIR,
-      resolvedDataFile: DATA_FILE,
-      isUsingPersistentDisk: !!envDataDir && envDataDir !== __dirname,
-      dataFileExists, dataFileSize, dataFileModified,
-      backupCount, newestBackup,
-      diskWritable, diskWriteError,
-      proyectosCountBHPro: (D.proyectos||[]).filter(p=>(p.empresa||'BH Pro')==='BH Pro').length,
-      proyectosCountKratos: (D.proyectos||[]).filter(p=>p.empresa==='Kratos').length,
-      facturasTotal: (D.facturas||[]).length,
-      serverStartedAt: SERVER_STARTED_AT
-    });
-  } catch (e) { r.status(500).json({ error: e.message }); }
-});
 const pc=new PlaidApi(new Configuration({basePath:PlaidEnvironments[ENV],baseOptions:{headers:{'PLAID-CLIENT-ID':CID,'PLAID-SECRET':SEC}}}));
 
 // ===== AUTH (stateless, signed cookie) =====
@@ -188,6 +145,49 @@ app.post('/api/data/restore-backup',adminAuth,(q,r)=>{
     saveToDisk();
     r.json({ success:true, proyectosCount: (D.proyectos||[]).length });
   }catch(e){ r.status(500).json({ success:false, message: e.message }); }
+});
+// Diagnostic endpoint: shows exactly where data is being read/written from, whether the
+// persistent disk env var is actually set, and file sizes/timestamps — so the app owner can
+// verify persistence is working correctly from inside the app, without needing Render's console.
+app.get('/api/data/diag', adminAuth, (q, r) => {
+  try {
+    const envDataDir = process.env.DATA_DIR || null;
+    let dataFileExists = false, dataFileSize = null, dataFileModified = null;
+    try {
+      const st = fs.statSync(DATA_FILE);
+      dataFileExists = true;
+      dataFileSize = st.size;
+      dataFileModified = st.mtime.toISOString();
+    } catch (e) { dataFileExists = false; }
+    let backupCount = 0, newestBackup = null;
+    try {
+      ensureBackupDir();
+      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('bhpro-data-') && f.endsWith('.json')).sort();
+      backupCount = files.length;
+      newestBackup = files.length ? files[files.length - 1] : null;
+    } catch (e) {}
+    let diskWritable = false, diskWriteError = null;
+    try {
+      const testFile = path.join(DATA_DIR, '.write-test-' + Date.now());
+      fs.writeFileSync(testFile, 'test', 'utf8');
+      fs.unlinkSync(testFile);
+      diskWritable = true;
+    } catch (e) { diskWriteError = e.message; }
+    r.json({
+      envDataDirSet: !!envDataDir,
+      envDataDirValue: envDataDir,
+      resolvedDataDir: DATA_DIR,
+      resolvedDataFile: DATA_FILE,
+      isUsingPersistentDisk: !!envDataDir && envDataDir !== __dirname,
+      dataFileExists, dataFileSize, dataFileModified,
+      backupCount, newestBackup,
+      diskWritable, diskWriteError,
+      proyectosCountBHPro: (D.proyectos||[]).filter(p=>(p.empresa||'BH Pro')==='BH Pro').length,
+      proyectosCountKratos: (D.proyectos||[]).filter(p=>p.empresa==='Kratos').length,
+      facturasTotal: (D.facturas||[]).length,
+      serverStartedAt: SERVER_STARTED_AT
+    });
+  } catch (e) { r.status(500).json({ error: e.message }); }
 });
 // ===== AUDIT LOG: records who (admin/Brandon vs arlene/Arlene) changed what, by diffing the =====
 // incoming array against what's currently saved, before overwriting. Human names, not roles.
