@@ -19,7 +19,7 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const MAX_BACKUPS = 30; // keep the last 30 automatic backups (rolling window)
 const MIN_BACKUP_INTERVAL_MS = 3 * 60 * 1000; // don't backup more than once every 3 minutes
 let lastBackupAt = 0;
-let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],auditLog:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
+let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],clientes:[],deletedIds:[],auditLog:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
 function loadFromDisk(){
   try{
     if(fs.existsSync(DATA_FILE)){
@@ -141,7 +141,7 @@ app.post('/api/data/restore-backup',adminAuth,(q,r)=>{
     if (!fs.existsSync(backupPath)) return r.status(404).json({ success:false, message: 'Ese respaldo no existe.' });
     const raw = fs.readFileSync(backupPath, 'utf8');
     const parsed = JSON.parse(raw);
-    D = Object.assign({proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],auditLog:[],plaid_access_token:null,_seeded:true,arlene_access_enabled:true}, parsed);
+    D = Object.assign({proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],clientes:[],deletedIds:[],auditLog:[],plaid_access_token:null,_seeded:true,arlene_access_enabled:true}, parsed);
     saveToDisk();
     r.json({ success:true, proyectosCount: (D.proyectos||[]).length });
   }catch(e){ r.status(500).json({ success:false, message: e.message }); }
@@ -203,6 +203,7 @@ function describeItem(tabla, item) {
     case 'facturas': return `Factura #${item.number || '?'} — ${item.billTo || ''} — $${item.amount || 0}`;
     case 'locacionesFacturacion': return `Dirección guardada — ${item.nombre || '?'}`;
     case 'empleados': return `Empleado — ${item.nombre || '?'}`;
+    case 'clientes': return `Cliente — ${item.nombre || '?'}${item.ubicacion ? ' (' + item.ubicacion + ')' : ''}`;
     default: return `${tabla} — ${item.id || ''}`;
   }
 }
@@ -230,7 +231,7 @@ app.get('/api/audit-log', adminAuth, (q, r) => r.json({ log: (D.auditLog || []).
 
 app.post('/api/data/full',auth,(q,r)=>{
   const role = verifyAuthCookie(q.headers.cookie);
-  ['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'].forEach(k=>{
+  ['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados','clientes'].forEach(k=>{
     if(q.body[k]!==undefined){
       const filtered = q.body[k].filter(item=>!D.deletedIds.includes(item.id));
       try { logAuditDiff(role, k, D[k], filtered); } catch(e) { console.error('[Audit log] error diffing', k, e.message); }
@@ -241,7 +242,7 @@ app.post('/api/data/full',auth,(q,r)=>{
 });
 app.post('/api/data/delete-item',auth,(q,r)=>{
   const {key,id}=q.body;
-  const validKeys=['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'];
+  const validKeys=['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados','clientes'];
   if(!validKeys.includes(key)||!id)return r.status(400).json({success:false,message:'Invalid key or id'});
   const removed = D[key].find(item=>item.id===id);
   if (removed) {
@@ -491,6 +492,11 @@ function executeAiTool(toolName, input, empresa) {
         estado: estado || 'Activo', notas: '', loc: loc||'', empresa: emp,
         pedroPct: 0
       });
+      if (!D.clientes) D.clientes = [];
+      const clienteYaExiste = D.clientes.some(c => (c.empresa||'BH Pro')===emp && c.nombre.trim().toLowerCase()===cliente.trim().toLowerCase());
+      if (!clienteYaExiste) {
+        D.clientes.push({ id: 'cli_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: cliente.trim(), ubicacion: loc||'', empresa: emp });
+      }
       saveToDisk();
       return { resultMsg: `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`, changed: true };
     }
