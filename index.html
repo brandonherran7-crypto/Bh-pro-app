@@ -283,8 +283,8 @@ select option{background:var(--black-3);}
   <p class="page-sub" data-i18n="sub.proyectos">Registro y control</p>
   <div class="card">
     <div class="card-title" data-i18n="ct.agregar_proyecto">Agregar Proyecto</div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><input type="text" id="p-num" placeholder="1070"></div><div><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="p-cli" placeholder="Acqualina Management LLC"></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div><input type="text" id="p-loc" list="loc-list" placeholder="Acqualina"><datalist id="loc-list"><option value="Acqualina"><option value="Palm Aire"></datalist></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><input type="text" id="p-num" placeholder="1070"></div><div><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="p-cli" list="p-cli-list" placeholder="Acqualina Management LLC" onfocus="populateClienteDatalist('p-cli-list')"><datalist id="p-cli-list"></datalist></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div><input type="text" id="p-loc" list="loc-list" placeholder="Acqualina" onfocus="populateLocDatalist('loc-list')"><datalist id="loc-list"><option value="Acqualina"><option value="Palm Aire"></datalist></div></div>
     <div class="fg" id="p-pedro-row"><div id="p-pedro-wrap" style="display:none;">
       <div class="fl">Tipo de Comisión Pedro</div>
       <select id="p-pedro-tipo" onchange="togglePedroInputType('p')" style="margin-bottom:6px;">
@@ -333,7 +333,7 @@ select option{background:var(--black-3);}
     <div id="pd-subtitle" style="font-size:.68rem;color:var(--gray);margin-bottom:12px;"></div>
     <div id="pd-edit-form" style="display:none;background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:12px;margin-bottom:14px;">
       <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.nombre_proyecto">Nombre del Proyecto</div><input type="text" id="pd-e-nombre"></div>
-      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="pd-e-cliente"></div>
+      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="pd-e-cliente" list="pd-e-cliente-list" onfocus="populateClienteDatalist('pd-e-cliente-list')"><datalist id="pd-e-cliente-list"></datalist></div>
       <div class="fg"><div><div class="fl" data-i18n="fld.valor_cotizado">Valor Cotizado $</div><input type="number" id="pd-e-valor" min="0" step="0.01"></div><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="pd-e-estado"><option value="Activo" data-i18n="opt.activo">Activo</option><option value="Completado" data-i18n="opt.completado">Completado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div></div>
       <div class="fg"><div><div class="fl" data-i18n="fld.fecha_inicio">Fecha Inicio</div><input type="date" id="pd-e-inicio"></div><div><div class="fl" data-i18n="fld.fecha_fin">Fecha Fin</div><input type="date" id="pd-e-fin"></div></div>
       <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.ubicacion">Ubicación</div><input type="text" id="pd-e-loc"></div>
@@ -442,6 +442,12 @@ select option{background:var(--black-3);}
     <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="c-est"><option>Pendiente</option><option>Pagado</option></select></div><div><div class="fl" data-i18n="fld.tipo_pago">Tipo Pago</div><select id="c-tip"><option>Cheque</option><option>Wire</option><option>Zelle</option><option>Cash</option></select></div></div>
     <div class="fg"><div><div class="fl" data-i18n="fld.chequewire"># Cheque/Wire</div><input type="text" id="c-che" placeholder="12345678"></div><div><div class="fl" data-i18n="fld.fecha_pago">Fecha Pago</div><input type="date" id="c-fpg"></div></div>
     <button class="btn" onclick="addCobro()" data-i18n="btn.registrar">+ Registrar</button>
+  </div>
+  <div class="card" style="border:1px solid #6B8ECC33;">
+    <div class="card-title">➕ Añadir Cliente Nuevo</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Regístralo aquí una vez y va a aparecer como opción para elegir en Proyectos, Cobros y Facturas — no hace falta escribirlo de nuevo cada vez.</p>
+    <div class="fg"><div><div class="fl">Nombre del Cliente</div><input type="text" id="nc-nombre" placeholder="Acqualina Management LLC"></div><div><div class="fl">Ubicación/Edificio (opcional)</div><input type="text" id="nc-loc" placeholder="Sunny Isles Beach"></div></div>
+    <button class="btn btn-sm btn-outline" style="width:100%;" onclick="addClienteNuevo()">➕ Guardar Cliente</button>
   </div>
   <div class="search-bar"><span style="color:var(--gold)">🔍</span><input type="text" id="sq-c" placeholder="Buscar factura, estado, cheque..." oninput="renderCobro()"></div>
   <div class="sinfo" id="si-c"></div>
@@ -607,7 +613,7 @@ select option{background:var(--black-3);}
 
 <script>
 // ===== STATE =====
-let S = { proyectos:[], gastos:[], nomina:[], cobros:[], abonos:[], facturas:[], locacionesFacturacion:[], empleados:[] };
+let S = { proyectos:[], gastos:[], nomina:[], cobros:[], abonos:[], facturas:[], locacionesFacturacion:[], empleados:[], clientes:[] };
 let selectedInvoices = new Set();
 
 // ===== HELPERS =====
@@ -849,7 +855,7 @@ async function loadData() {
     const res = await fetch('/api/data');
     if (res.ok) {
       const d = await res.json();
-      if (d.proyectos) S = { proyectos:d.proyectos||[], gastos:d.gastos||[], nomina:d.nomina||[], cobros:d.cobros||[], abonos:d.abonos||[], facturas:d.facturas||[], locacionesFacturacion:d.locacionesFacturacion||[], empleados:d.empleados||[] };
+      if (d.proyectos) S = { proyectos:d.proyectos||[], gastos:d.gastos||[], nomina:d.nomina||[], cobros:d.cobros||[], abonos:d.abonos||[], facturas:d.facturas||[], locacionesFacturacion:d.locacionesFacturacion||[], empleados:d.empleados||[], clientes:d.clientes||[] };
       window._serverSeeded = !!d._seeded;
     }
   } catch(e) { console.log('Load error:', e); }
@@ -896,7 +902,8 @@ async function saveData() {
       abonos: mergeArrayById(serverData.abonos, S.abonos),
       facturas: mergeArrayById(serverData.facturas, S.facturas),
       locacionesFacturacion: mergeArrayById(serverData.locacionesFacturacion, S.locacionesFacturacion),
-      empleados: mergeArrayById(serverData.empleados, S.empleados)
+      empleados: mergeArrayById(serverData.empleados, S.empleados),
+      clientes: mergeArrayById(serverData.clientes, S.clientes)
     };
     S = merged;
     await fetch('/api/data/full', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
@@ -1198,8 +1205,22 @@ function addProyecto() {
   if (!num||!nom) return alert('Ingresa # y nombre');
   const empresa = ACTIVE_COMPANY;
   const pedroTipo = document.getElementById('p-pedro-tipo') ? document.getElementById('p-pedro-tipo').value : 'porcentaje';
-  S.proyectos.push({ id:gid(), num, nombre:nom, cliente:document.getElementById('p-cli').value.trim(), valor:parseFloat(document.getElementById('p-val').value)||0, inicio:document.getElementById('p-ini').value, fin:document.getElementById('p-fin').value, estado:document.getElementById('p-est').value, notas:document.getElementById('p-not').value.trim(), loc:document.getElementById('p-loc').value.trim(), empresa, pedroTipo, pedroPct: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro').value)||0) : 0, pedroValor: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro-fijo').value)||0) : 0 });
+  const clienteVal = document.getElementById('p-cli').value.trim();
+  const locVal = document.getElementById('p-loc').value.trim();
+  S.proyectos.push({ id:gid(), num, nombre:nom, cliente:clienteVal, valor:parseFloat(document.getElementById('p-val').value)||0, inicio:document.getElementById('p-ini').value, fin:document.getElementById('p-fin').value, estado:document.getElementById('p-est').value, notas:document.getElementById('p-not').value.trim(), loc:locVal, empresa, pedroTipo, pedroPct: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro').value)||0) : 0, pedroValor: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro-fijo').value)||0) : 0 });
+  registrarClienteSiEsNuevo(clienteVal, locVal, empresa);
   saveData(); ['p-num','p-nom','p-val','p-ini','p-fin','p-not','p-loc','p-pedro'].forEach(id=>document.getElementById(id).value=''); renderAll();
+}
+// Auto-registers a client name into S.clientes the moment it's used anywhere (project, invoice,
+// collection) if it's not already there — so it shows up as a suggestion everywhere else from
+// then on, without Brandon having to type it twice or remember to "register" it separately.
+function registrarClienteSiEsNuevo(nombre, ubicacion, empresa) {
+  if (!nombre) return;
+  const empresaFinal = empresa || ACTIVE_COMPANY;
+  const yaExiste = (S.clientes||[]).some(c => (c.empresa||'BH Pro') === empresaFinal && c.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
+  if (yaExiste) return;
+  if (!S.clientes) S.clientes = [];
+  S.clientes.push({ id:gid(), nombre: nombre.trim(), ubicacion: (ubicacion||'').trim(), empresa: empresaFinal });
 }
 async function delP(id){if(!confirm('¿Eliminar?'))return;S.proyectos=S.proyectos.filter(p=>p.id!==id);await deleteServerItem('proyectos', id);saveData();renderAll();}
 function toggleProyectoCerrado(id){
@@ -1356,12 +1377,36 @@ function autofillEmpleadoTarifa() {
   }
 }
 
+function addClienteNuevo() {
+  const nombre = document.getElementById('nc-nombre').value.trim();
+  const loc = document.getElementById('nc-loc').value.trim();
+  if (!nombre) return alert(tt('Escribe el nombre del cliente','Enter the client name'));
+  const yaExiste = (S.clientes||[]).some(c => (c.empresa||'BH Pro')===ACTIVE_COMPANY && c.nombre.trim().toLowerCase()===nombre.toLowerCase());
+  if (yaExiste) { alert(tt('Ese cliente ya existe.','That client already exists.')); return; }
+  if (!S.clientes) S.clientes = [];
+  S.clientes.push({ id:gid(), nombre, ubicacion: loc, empresa: ACTIVE_COMPANY });
+  saveData();
+  document.getElementById('nc-nombre').value = '';
+  document.getElementById('nc-loc').value = '';
+  alert('✅ ' + tt('Cliente guardado. Ya aparece como opción en Proyectos, Cobros y Facturas.','Client saved. It now shows up as an option in Projects, Collections, and Invoices.'));
+}
 function addCobro() {
   const num = document.getElementById('c-num').value.trim();
   const mon = parseFloat(document.getElementById('c-mon').value)||0;
   if (!num||!mon) return alert(tt('Ingresa # y monto (el monto no puede quedar en 0)','Enter # and amount (amount can\'t be 0)'));
-  S.cobros.push({ id:gid(), num, cliente:document.getElementById('c-cli').value.trim(), monto:mon, fecha:document.getElementById('c-fec').value, estado:document.getElementById('c-est').value, tipo:document.getElementById('c-tip').value, cheque:document.getElementById('c-che').value.trim(), fpago:document.getElementById('c-fpg').value, empresa: ACTIVE_COMPANY });
+  const clienteVal = document.getElementById('c-cli').value.trim();
+  S.cobros.push({ id:gid(), num, cliente:clienteVal, monto:mon, fecha:document.getElementById('c-fec').value, estado:document.getElementById('c-est').value, tipo:document.getElementById('c-tip').value, cheque:document.getElementById('c-che').value.trim(), fpago:document.getElementById('c-fpg').value, empresa: ACTIVE_COMPANY });
+  registrarClienteSiEsNuevo(clienteVal, '', ACTIVE_COMPANY);
   saveData(); ['c-num','c-cli','c-mon','c-fec','c-che','c-fpg'].forEach(id=>document.getElementById(id).value=''); renderAll();
+}
+function populateLocDatalist(listId) {
+  const dl = document.getElementById(listId);
+  if (!dl) return;
+  const locs = new Set(['Acqualina','Palm Aire']);
+  S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(p=>{ if(p.loc) locs.add(p.loc.trim()); });
+  (S.clientes||[]).filter(c=>(c.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(c=>{ if(c.ubicacion) locs.add(c.ubicacion.trim()); });
+  const sorted = Array.from(locs).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  dl.innerHTML = sorted.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
 function populateClienteDatalist(listId) {
   const dl = document.getElementById(listId);
@@ -1370,6 +1415,7 @@ function populateClienteDatalist(listId) {
   S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(p=>{ if(p.cliente) names.add(p.cliente.trim()); });
   S.cobros.filter(c=>(c.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(c=>{ if(c.cliente) names.add(c.cliente.trim()); });
   S.facturas.filter(f=>(f.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(f=>{ if(f.billTo) names.add(f.billTo.trim()); });
+  (S.clientes||[]).filter(c=>(c.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(c=>{ if(c.nombre) names.add(c.nombre.trim()); });
   const sorted = Array.from(names).sort((a,b)=>a.localeCompare(b));
   dl.innerHTML = sorted.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
@@ -1914,7 +1960,11 @@ function populateBillToDatalist() {
   const dl = document.getElementById('f-bill-list');
   if (!dl) return;
   const facturasEmpresa = S.facturas.filter(f => (f.empresa||'BH Pro') === ACTIVE_COMPANY);
-  const nombres = [...new Set(facturasEmpresa.map(f => (f.billTo||'').trim()).filter(Boolean))];
+  const clientesEmpresa = (S.clientes||[]).filter(c => (c.empresa||'BH Pro') === ACTIVE_COMPANY);
+  const nombres = [...new Set([
+    ...facturasEmpresa.map(f => (f.billTo||'').trim()),
+    ...clientesEmpresa.map(c => (c.nombre||'').trim())
+  ].filter(Boolean))];
   nombres.sort((a,b) => a.localeCompare(b));
   dl.innerHTML = nombres.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
@@ -2125,6 +2175,7 @@ function saveInvoice() {
   const inv = Object.assign({id:gid(), sent:false, createdAt:new Date().toISOString()}, built);
   const invEmpresa = inv.empresa || ACTIVE_COMPANY;
   S.facturas.push(inv);
+  registrarClienteSiEsNuevo(inv.billTo, '', invEmpresa);
   // Add to cobros if not exists (scoped to this company, never cross-matches the other company)
   if (!S.cobros.find(c=>c.num===inv.number && (c.empresa||invEmpresa)===invEmpresa)) {
     S.cobros.push({ id:gid(), num:inv.number, cliente:inv.billTo, monto:inv.amount, fecha:inv.date, estado:'Pendiente', tipo:'', cheque:'', fpago:'', empresa: invEmpresa });
