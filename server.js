@@ -428,13 +428,18 @@ function executeAiTool(toolName, input, empresa) {
       return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`, changed: true };
     }
     if (toolName === 'create_project') {
-      const { nombre, cliente, valor, loc, estado } = input;
+      const { nombre, cliente, valor, loc, estado, numero } = input;
       if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
       const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
       const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
       const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
       const facNums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
-      const nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
+      let nextNum;
+      if (numero && !proyectosEmp.some(p=>p.num===String(numero)) && !facturasEmp.some(f=>f.number===String(numero))) {
+        nextNum = String(numero);
+      } else {
+        nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
+      }
       D.proyectos.push({
         id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         num: nextNum, nombre, cliente, valor: valor||0,
@@ -561,7 +566,7 @@ app.post('/api/claude', auth, async (q, r) => {
       },
       {
         name: 'create_project',
-        description: 'Crea un proyecto nuevo (con número automático siguiente en la secuencia). Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto.',
+        description: 'Crea un proyecto nuevo. Si el usuario da un número específico (ej. "1001", o el mismo número que un invoice), pásalo en "numero" para que el proyecto quede con ese número — así coincide con la factura. Si no da número, se asigna automáticamente el siguiente en la secuencia. Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto.',
         input_schema: {
           type: 'object',
           properties: {
@@ -569,7 +574,8 @@ app.post('/api/claude', auth, async (q, r) => {
             cliente: { type: 'string', description: 'Nombre del cliente' },
             valor: { type: 'number', description: 'Valor cotizado del proyecto en dólares' },
             loc: { type: 'string', description: 'Ubicación/edificio (opcional)' },
-            estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Por defecto Activo si no se especifica' }
+            estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Por defecto Activo si no se especifica' },
+            numero: { type: 'string', description: 'Número de proyecto explícito a usar (ej. si debe coincidir con el número de invoice que el usuario mencionó). Si ese número ya está en uso, se ignora y se autonumera.' }
           },
           required: ['nombre', 'cliente', 'valor']
         }
