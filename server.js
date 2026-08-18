@@ -297,11 +297,11 @@ items = items.map(it=>({
   rate: parseFloat(it.rate)||parseFloat(it.amount)||0
 }));
 const tableTop = 258;
-const colItem = 60, colDesc = 190, colRate = 400, colTotal = 480;
+const colItem = 60, colDesc = 155, colRate = 400, colTotal = 480;
 doc.rect(50,tableTop,510,24).fill(t);
 doc.fontSize(9).fillColor('white').font('Helvetica-Bold')
   .text('Item',colItem,tableTop+8)
-  .text('Description',colDesc,tableTop+8)
+  .text('Scope of Work',colDesc,tableTop+8)
   .text('Unit Price ($)',colRate,tableTop+8,{width:75,align:'right'})
   .text('Total ($)',colTotal,tableTop+8,{width:80,align:'right'});
 let y = tableTop+34;
@@ -309,7 +309,7 @@ let subtotal = 0;
 items.forEach((it,i)=>{
   const lineTotal = it.qty*it.rate;
   subtotal += lineTotal;
-  const descWidth = 120, detailWidth = 195;
+  const descWidth = 85, detailWidth = 235;
   const descHeight = doc.heightOfString(it.desc,{width:descWidth,fontSize:9});
   const detailHeight = it.detail ? doc.heightOfString(it.detail,{width:detailWidth,fontSize:9}) : 0;
   const rowHeight = Math.max(20, descHeight, detailHeight) + 12;
