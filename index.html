@@ -232,29 +232,7 @@ select option{background:var(--black-3);}
   </div>
   <div class="sl" data-i18n="lbl.pendientes">Pendientes</div>
   <div class="card" id="dash-pendientes"></div>
-</div>
 
-<!-- PROYECTOS -->
-<div class="section" id="proyectos">
-  <h1 class="page-title" data-i18n="title.proyectos">Proyectos</h1>
-  <p class="page-sub" data-i18n="sub.proyectos">Registro y control</p>
-  <div class="card">
-    <div class="card-title" data-i18n="ct.agregar_proyecto">Agregar Proyecto</div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><input type="text" id="p-num" placeholder="1070"></div><div><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="p-cli" placeholder="Acqualina Management LLC"></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div><input type="text" id="p-loc" list="loc-list" placeholder="Acqualina"><datalist id="loc-list"><option value="Acqualina"><option value="Palm Aire"></datalist></div></div>
-    <div class="fg" id="p-pedro-row"><div id="p-pedro-wrap" style="display:none;">
-      <div class="fl">Tipo de Comisión Pedro</div>
-      <select id="p-pedro-tipo" onchange="togglePedroInputType('p')" style="margin-bottom:6px;">
-        <option value="porcentaje">% Porcentaje de ganancia</option>
-        <option value="fijo">Valor Fijo $</option>
-      </select>
-      <div id="p-pedro-pct-wrap"><div class="fl" data-i18n="fld.comision_pedro">% Comisión Pedro</div><input type="number" id="p-pedro" placeholder="20" min="0" max="100" step="0.1"></div>
-      <div id="p-pedro-fijo-wrap" style="display:none;"><div class="fl">Valor Fijo Pedro $</div><input type="number" id="p-pedro-fijo" placeholder="500" min="0" step="0.01"></div>
-    </div><div></div></div>
-    <div class="fg3"><div><div class="fl" data-i18n="fld.fecha_inicio">Fecha Inicio</div><input type="date" id="p-ini"></div><div><div class="fl" data-i18n="fld.fecha_fin">Fecha Fin</div><input type="date" id="p-fin"></div><div><div class="fl" data-i18n="fld.valor_cotizado">Valor Cotizado $</div><input type="number" id="p-val" placeholder="0"></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="p-est"><option value="Activo" data-i18n="opt.activo">Activo</option><option value="Completado" data-i18n="opt.completado">Completado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div><div><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="p-not" placeholder="Opcional"></div></div>
-    <button class="btn" onclick="addProyecto()" data-i18n="btn.agregar_proyecto_submit">+ Agregar Proyecto</button>
-  </div>
   <div class="card">
     <div class="card-title" data-i18n="ct.importar_excel">📥 Importar/Actualizar desde Excel</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.excel_import_desc">Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.</p>
@@ -290,6 +268,29 @@ select option{background:var(--black-3);}
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.historial_desc">Registro de quién agregó, editó o eliminó algo (Brandon o Arlene), con fecha y hora.</p>
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadAuditLog()" data-i18n="btn.ver_historial">📋 Ver Historial</button>
     <div id="audit-log-list" style="font-size:.7rem;max-height:340px;overflow-y:auto;background:#0a1628;padding:8px;border-radius:6px;"></div>
+  </div>
+</div>
+
+<!-- PROYECTOS -->
+<div class="section" id="proyectos">
+  <h1 class="page-title" data-i18n="title.proyectos">Proyectos</h1>
+  <p class="page-sub" data-i18n="sub.proyectos">Registro y control</p>
+  <div class="card">
+    <div class="card-title" data-i18n="ct.agregar_proyecto">Agregar Proyecto</div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><input type="text" id="p-num" placeholder="1070"></div><div><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="p-cli" placeholder="Acqualina Management LLC"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div><input type="text" id="p-loc" list="loc-list" placeholder="Acqualina"><datalist id="loc-list"><option value="Acqualina"><option value="Palm Aire"></datalist></div></div>
+    <div class="fg" id="p-pedro-row"><div id="p-pedro-wrap" style="display:none;">
+      <div class="fl">Tipo de Comisión Pedro</div>
+      <select id="p-pedro-tipo" onchange="togglePedroInputType('p')" style="margin-bottom:6px;">
+        <option value="porcentaje">% Porcentaje de ganancia</option>
+        <option value="fijo">Valor Fijo $</option>
+      </select>
+      <div id="p-pedro-pct-wrap"><div class="fl" data-i18n="fld.comision_pedro">% Comisión Pedro</div><input type="number" id="p-pedro" placeholder="20" min="0" max="100" step="0.1"></div>
+      <div id="p-pedro-fijo-wrap" style="display:none;"><div class="fl">Valor Fijo Pedro $</div><input type="number" id="p-pedro-fijo" placeholder="500" min="0" step="0.01"></div>
+    </div><div></div></div>
+    <div class="fg3"><div><div class="fl" data-i18n="fld.fecha_inicio">Fecha Inicio</div><input type="date" id="p-ini"></div><div><div class="fl" data-i18n="fld.fecha_fin">Fecha Fin</div><input type="date" id="p-fin"></div><div><div class="fl" data-i18n="fld.valor_cotizado">Valor Cotizado $</div><input type="number" id="p-val" placeholder="0"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="p-est"><option value="Activo" data-i18n="opt.activo">Activo</option><option value="Completado" data-i18n="opt.completado">Completado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div><div><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="p-not" placeholder="Opcional"></div></div>
+    <button class="btn" onclick="addProyecto()" data-i18n="btn.agregar_proyecto_submit">+ Agregar Proyecto</button>
   </div>
   <div class="search-bar"><span style="color:var(--gold)">🔍</span><input type="text" id="sq-p" placeholder="Buscar proyecto..." oninput="renderProy()"></div>
   <div class="sinfo" id="si-p"></div>
