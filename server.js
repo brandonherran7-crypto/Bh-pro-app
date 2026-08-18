@@ -19,7 +19,7 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const MAX_BACKUPS = 30; // keep the last 30 automatic backups (rolling window)
 const MIN_BACKUP_INTERVAL_MS = 3 * 60 * 1000; // don't backup more than once every 3 minutes
 let lastBackupAt = 0;
-let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
+let D={proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],auditLog:[],plaid_access_token:null,_seeded:false,arlene_access_enabled:true};
 function loadFromDisk(){
   try{
     if(fs.existsSync(DATA_FILE)){
@@ -140,16 +140,71 @@ app.post('/api/data/restore-backup',adminAuth,(q,r)=>{
     if (!fs.existsSync(backupPath)) return r.status(404).json({ success:false, message: 'Ese respaldo no existe.' });
     const raw = fs.readFileSync(backupPath, 'utf8');
     const parsed = JSON.parse(raw);
-    D = Object.assign({proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],plaid_access_token:null,_seeded:true,arlene_access_enabled:true}, parsed);
+    D = Object.assign({proyectos:[],gastos:[],nomina:[],cobros:[],abonos:[],facturas:[],locacionesFacturacion:[],empleados:[],deletedIds:[],auditLog:[],plaid_access_token:null,_seeded:true,arlene_access_enabled:true}, parsed);
     saveToDisk();
     r.json({ success:true, proyectosCount: (D.proyectos||[]).length });
   }catch(e){ r.status(500).json({ success:false, message: e.message }); }
 });
-app.post('/api/data/full',auth,(q,r)=>{['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'].forEach(k=>{if(q.body[k]!==undefined)D[k]=q.body[k].filter(item=>!D.deletedIds.includes(item.id));});D._seeded=true;saveToDisk();r.json({success:true});});
+// ===== AUDIT LOG: records who (admin/Brandon vs arlene/Arlene) changed what, by diffing the =====
+// incoming array against what's currently saved, before overwriting. Human names, not roles.
+const ROLE_NAMES = { admin: 'Brandon', arlene: 'Arlene' };
+const MAX_AUDIT_LOG = 500;
+function describeItem(tabla, item) {
+  switch (tabla) {
+    case 'proyectos': return `Proyecto #${item.num || '?'} — ${item.nombre || 'sin nombre'}`;
+    case 'gastos': return `Gasto ${item.proy ? `(Proyecto #${item.proy})` : ''} — $${item.monto || 0} — ${item.cat || item.categoria || ''}`.trim();
+    case 'nomina': return `Nómina — ${item.empleado || '?'} — $${item.total || 0} (Proyecto #${item.proy || '?'})`;
+    case 'cobros': return `Cobro — Proyecto #${item.num || '?'} — $${item.monto || 0} — ${item.estado || ''}`;
+    case 'abonos': return `Abono a Arlene — $${item.monto || 0}`;
+    case 'facturas': return `Factura #${item.number || '?'} — ${item.billTo || ''} — $${item.amount || 0}`;
+    case 'locacionesFacturacion': return `Dirección guardada — ${item.nombre || '?'}`;
+    case 'empleados': return `Empleado — ${item.nombre || '?'}`;
+    default: return `${tabla} — ${item.id || ''}`;
+  }
+}
+function logAuditDiff(role, tabla, oldArr, newArr) {
+  const oldMap = new Map((oldArr || []).map(x => [x.id, x]));
+  const newMap = new Map((newArr || []).map(x => [x.id, x]));
+  const who = ROLE_NAMES[role] || role || 'Desconocido';
+  const now = new Date().toISOString();
+  for (const [id, item] of newMap) {
+    const prev = oldMap.get(id);
+    if (!prev) {
+      D.auditLog.push({ ts: now, who, tabla, accion: 'creado', resumen: describeItem(tabla, item) });
+    } else if (JSON.stringify(prev) !== JSON.stringify(item)) {
+      D.auditLog.push({ ts: now, who, tabla, accion: 'editado', resumen: describeItem(tabla, item) });
+    }
+  }
+  for (const [id, item] of oldMap) {
+    if (!newMap.has(id)) {
+      D.auditLog.push({ ts: now, who, tabla, accion: 'eliminado', resumen: describeItem(tabla, item) });
+    }
+  }
+  if (D.auditLog.length > MAX_AUDIT_LOG) D.auditLog = D.auditLog.slice(-MAX_AUDIT_LOG);
+}
+app.get('/api/audit-log', adminAuth, (q, r) => r.json({ log: (D.auditLog || []).slice().reverse() }));
+
+app.post('/api/data/full',auth,(q,r)=>{
+  const role = verifyAuthCookie(q.headers.cookie);
+  ['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'].forEach(k=>{
+    if(q.body[k]!==undefined){
+      const filtered = q.body[k].filter(item=>!D.deletedIds.includes(item.id));
+      try { logAuditDiff(role, k, D[k], filtered); } catch(e) { console.error('[Audit log] error diffing', k, e.message); }
+      D[k]=filtered;
+    }
+  });
+  D._seeded=true;saveToDisk();r.json({success:true});
+});
 app.post('/api/data/delete-item',auth,(q,r)=>{
   const {key,id}=q.body;
   const validKeys=['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados'];
   if(!validKeys.includes(key)||!id)return r.status(400).json({success:false,message:'Invalid key or id'});
+  const removed = D[key].find(item=>item.id===id);
+  if (removed) {
+    const role = verifyAuthCookie(q.headers.cookie);
+    D.auditLog.push({ ts: new Date().toISOString(), who: ROLE_NAMES[role] || role || 'Desconocido', tabla: key, accion: 'eliminado', resumen: describeItem(key, removed) });
+    if (D.auditLog.length > MAX_AUDIT_LOG) D.auditLog = D.auditLog.slice(-MAX_AUDIT_LOG);
+  }
   D[key]=D[key].filter(item=>item.id!==id);
   if(!D.deletedIds.includes(id))D.deletedIds.push(id);
   if(D.deletedIds.length>2000)D.deletedIds=D.deletedIds.slice(-2000); // keep tombstone list from growing forever
@@ -581,7 +636,7 @@ app.post('/api/claude', auth, async (q, r) => {
     let res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 800, system: fullSystem, messages, tools })
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 4096, system: fullSystem, messages, tools })
     });
     const rawText = await res.text();
     logClaudeDebug('[Claude API] HTTP status:', res.status, res.ok ? 'OK' : 'NOT OK', '| body preview:', rawText.slice(0, 500));
@@ -620,7 +675,7 @@ app.post('/api/claude', auth, async (q, r) => {
       res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1500, system: fullSystem, messages, tools })
+        body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 4096, system: fullSystem, messages, tools })
       });
       data = await res.json();
       if (data && data.type === 'error') {
@@ -637,7 +692,9 @@ app.post('/api/claude', auth, async (q, r) => {
       logClaudeDebug('[Claude] Empty reply — full last response was:', JSON.stringify(data));
       reply = allResultMsgs.length
         ? `✅ Listo:\n` + allResultMsgs.map(m => `• ${m}`).join('\n')
-        : `No pude generar una respuesta esta vez (stop_reason: ${data.stop_reason || '?'}, sin texto ni herramientas usadas). Revisa los logs del servidor en Render para ver la respuesta completa que dio la API. Intenta de nuevo, o si estabas registrando varias cosas, revisa la lista para confirmar si ya quedaron guardadas antes de repetir.`;
+        : (data.stop_reason === 'max_tokens'
+            ? `⚠️ La respuesta se cortó porque era demasiado larga (límite de tokens alcanzado). Prueba pedir la acción de forma más corta o en pasos más chicos (por ejemplo, un proyecto/factura a la vez), e intenta de nuevo.`
+            : `No pude generar una respuesta esta vez (stop_reason: ${data.stop_reason || '?'}, sin texto ni herramientas usadas). Revisa el registro técnico ("🔍 Ver Registro Técnico" en Proyectos) para más detalle. Intenta de nuevo, o si estabas registrando varias cosas, revisa la lista para confirmar si ya quedaron guardadas antes de repetir.`);
     }
     r.json({ reply, dataChanged, changedCount });
   } catch (e) {
