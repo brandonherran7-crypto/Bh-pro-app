@@ -195,6 +195,21 @@ app.get('/api/data/diag', adminAuth, (q, r) => {
     });
   } catch (e) { r.status(500).json({ error: e.message }); }
 });
+// Finds cobros that share the same project number + company — this should never happen (each
+// project should have exactly one cobro record), but a past bug in register_cobro could create
+// duplicates, so this lets the app owner find and clean them up directly from the app.
+app.get('/api/cobros/duplicados', adminAuth, (q, r) => {
+  try {
+    const groups = {};
+    (D.cobros || []).forEach(c => {
+      const key = (c.empresa || 'BH Pro') + '::' + c.num;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+    const duplicados = Object.values(groups).filter(g => g.length > 1);
+    r.json({ duplicados, totalGrupos: duplicados.length });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
 // ===== AUDIT LOG: records who (admin/Brandon vs arlene/Arlene) changed what, by diffing the =====
 // incoming array against what's currently saved, before overwriting. Human names, not roles.
 const ROLE_NAMES = { admin: 'Brandon', arlene: 'Arlene' };
@@ -516,18 +531,37 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       if (!proyectoNum || monto === undefined || !monto) return { resultMsg: 'Error: faltan datos o el monto es cero (proyectoNum o monto) para registrar el cobro.', changed: false };
       const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
       if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
-      D.cobros.push({
-        id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-        num: proyectoNum, cliente: proj.cliente||'', monto: monto||0,
-        fecha: fecha || new Date().toISOString().slice(0,10),
-        estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: numeroReferencia || '',
-        fpago: fecha || new Date().toISOString().slice(0,10), empresa: emp,
-        notas: notas || 'Registrado por asistente',
-        foto: imageDataUrl || ''
-      });
+      const fechaFinal = fecha || new Date().toISOString().slice(0,10);
+      // IMPORTANT: each project should have exactly ONE cobro record (this is how "Total
+      // Invoiced" is calculated — by summing every cobro). If a cobro already exists for this
+      // project number, UPDATE it to Pagado instead of pushing a second one, or every payment
+      // registered via the assistant would silently double-count the invoice total.
+      const existing = D.cobros.find(c => c.num === proyectoNum && (c.empresa||'BH Pro') === emp);
+      let montoWarning = '';
+      if (existing) {
+        if (existing.monto && monto && Math.abs(existing.monto - monto) > 0.01) {
+          montoWarning = ` ⚠️ Ojo: el monto del comprobante ($${monto.toFixed(2)}) no coincide exactamente con el monto ya registrado para ese proyecto ($${existing.monto.toFixed(2)}) — revísalo, no lo cambié automáticamente.`;
+        }
+        existing.estado = 'Pagado';
+        existing.tipo = 'Transferencia bancaria';
+        existing.cheque = numeroReferencia || existing.cheque || '';
+        existing.fpago = fechaFinal;
+        existing.notas = notas || existing.notas || 'Registrado por asistente';
+        if (imageDataUrl) existing.foto = imageDataUrl;
+      } else {
+        D.cobros.push({
+          id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+          num: proyectoNum, cliente: proj.cliente||'', monto: monto||0,
+          fecha: fechaFinal,
+          estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: numeroReferencia || '',
+          fpago: fechaFinal, empresa: emp,
+          notas: notas || 'Registrado por asistente',
+          foto: imageDataUrl || ''
+        });
+      }
       saveToDisk();
       const refTxt = numeroReferencia ? ` (ref. ${numeroReferencia})` : '';
-      return { resultMsg: `Cobro de $${(monto||0).toFixed(2)} registrado para el proyecto #${proyectoNum} "${proj.nombre}"${refTxt}${imageDataUrl ? ', con el comprobante adjunto guardado' : ''}. Ya está guardado en Cobros.`, changed: true };
+      return { resultMsg: `Cobro de $${(monto||0).toFixed(2)} ${existing ? 'actualizado a Pagado' : 'registrado'} para el proyecto #${proyectoNum} "${proj.nombre}"${refTxt}${imageDataUrl ? ', con el comprobante adjunto guardado' : ''}. Ya está guardado en Cobros.${montoWarning}`, changed: true };
     }
     if (toolName === 'register_gasto') {
       const { proyectoNum, categoria, monto, descripcion } = input;
@@ -563,6 +597,47 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       });
       saveToDisk();
       return { resultMsg: `Pago de nómina registrado: ${empleado}, $${tot.toFixed(2)}, proyecto #${proyectoNum} "${proj.nombre}".`, changed: true };
+    }
+    if (toolName === 'create_empleado') {
+      const { nombre, telefono, email, tarifaHabitual, notas } = input;
+      if (!nombre) return { resultMsg: 'Error: falta el nombre del empleado.', changed: false };
+      if (!D.empleados) D.empleados = [];
+      let e = D.empleados.find(x => (x.empresa||'BH Pro') === emp && x.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
+      const isNew = !e;
+      if (!e) {
+        e = { id: 'emp_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: nombre.trim(), empresa: emp, documentos: [] };
+        D.empleados.push(e);
+      }
+      if (telefono !== undefined) e.telefono = telefono;
+      if (email !== undefined) e.email = email;
+      if (tarifaHabitual !== undefined) e.tarifaHabitual = tarifaHabitual;
+      if (notas !== undefined) e.notas = notas;
+      if (!e.telefono) e.telefono = e.telefono || '';
+      if (!e.email) e.email = e.email || '';
+      if (!e.tarifaHabitual) e.tarifaHabitual = e.tarifaHabitual || 0;
+      if (!e.notas) e.notas = e.notas || '';
+      // If an image was attached in this same message, treat it as the employee's W9/document
+      if (imageDataUrl) {
+        if (!e.documentos) e.documentos = [];
+        e.documentos.push({ id: 'doc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: 'W9', data: imageDataUrl });
+      }
+      saveToDisk();
+      return { resultMsg: `${isNew ? 'Ficha creada' : 'Ficha actualizada'} para "${e.nombre}"${imageDataUrl ? ' con el documento adjunto guardado' : ''}. Ya está en la pestaña Nómina.`, changed: true };
+    }
+    if (toolName === 'add_empleado_documento') {
+      const { nombreEmpleado, nombreDocumento } = input;
+      if (!nombreEmpleado) return { resultMsg: 'Error: falta el nombre del empleado para adjuntar el documento.', changed: false };
+      if (!imageDataUrl) return { resultMsg: 'Error: no hay ninguna imagen adjunta en este mensaje para guardar como documento.', changed: false };
+      if (!D.empleados) D.empleados = [];
+      let e = D.empleados.find(x => (x.empresa||'BH Pro') === emp && x.nombre.trim().toLowerCase() === nombreEmpleado.trim().toLowerCase());
+      if (!e) {
+        e = { id: 'emp_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: nombreEmpleado.trim(), empresa: emp, telefono:'', email:'', tarifaHabitual:0, notas:'', documentos: [] };
+        D.empleados.push(e);
+      }
+      if (!e.documentos) e.documentos = [];
+      e.documentos.push({ id: 'doc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: nombreDocumento || 'Documento', data: imageDataUrl });
+      saveToDisk();
+      return { resultMsg: `Documento "${nombreDocumento || 'Documento'}" guardado en la ficha de "${e.nombre}".`, changed: true };
     }
     return { resultMsg: `Error: herramienta desconocida "${toolName}".`, changed: false };
   } catch (e) {
@@ -688,6 +763,33 @@ app.post('/api/claude', auth, async (q, r) => {
             total: { type: 'number', description: 'Total pagado en dólares. Si no se especifica, se calcula como horas x tarifa.' }
           },
           required: ['proyectoNum', 'empleado']
+        }
+      },
+      {
+        name: 'create_empleado',
+        description: 'Crea o actualiza la ficha de un empleado (nombre, teléfono, correo, tarifa habitual, notas). Úsala cuando el usuario pida "crear una ficha", "registrar la información" o "guardar los datos" de uno o varios empleados, por voz/texto. Si el usuario pide fichas para varios empleados a la vez (ej. "regístrame todos los que ya tengo"), llama a esta herramienta UNA VEZ POR CADA nombre — puedes y debes llamarla muchas veces seguidas en el mismo turno. Si el usuario adjunta una foto de un W9 junto con el nombre del empleado, esa foto se guarda automáticamente como documento de esa ficha. Si el empleado ya tiene ficha, esto la actualiza en vez de duplicarla.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            nombre: { type: 'string', description: 'Nombre del empleado, tal cual aparece en nómina' },
+            telefono: { type: 'string', description: 'Teléfono, si el usuario lo da' },
+            email: { type: 'string', description: 'Correo, si el usuario lo da' },
+            tarifaHabitual: { type: 'number', description: 'Tarifa habitual por hora/día en dólares, si el usuario la da' },
+            notas: { type: 'string', description: 'Notas (especialidad, disponibilidad, etc.), si el usuario las da' }
+          },
+          required: ['nombre']
+        }
+      },
+      {
+        name: 'add_empleado_documento',
+        description: 'Guarda una foto adjunta (W9, licencia, ID, etc.) como documento en la ficha de un empleado ya existente o nuevo. Úsala cuando el usuario suba una imagen y diga que es un documento de un empleado específico (ej. "guárdale este W9 a Antonio").',
+        input_schema: {
+          type: 'object',
+          properties: {
+            nombreEmpleado: { type: 'string', description: 'Nombre del empleado al que pertenece el documento' },
+            nombreDocumento: { type: 'string', description: 'Nombre del documento, ej. "W9", "Licencia", "ID". Si no se especifica, se guarda como "Documento".' }
+          },
+          required: ['nombreEmpleado']
         }
       }
     ];
