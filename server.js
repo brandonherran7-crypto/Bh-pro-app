@@ -458,22 +458,27 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Se actualizaron ${updated.length} proyecto(s) a estado "${estado}": ${updated.join(', ')||'(ninguno encontrado)'}.`, changed: updated.length > 0 };
     }
     if (toolName === 'create_invoice') {
-      const { billTo, projectName, items } = input;
+      const { billTo, projectName, items, numero, fecha, note } = input;
       if (!billTo || !Array.isArray(items) || !items.length) return { resultMsg: 'Error: faltan datos (billTo o items) para crear la factura.', changed: false };
       const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
       const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
       const nums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
       const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
-      const nextNum = (Math.max(0, ...nums, ...proyNums) + 1).toString();
+      let nextNum;
+      if (numero && !facturasEmp.some(f=>f.number===String(numero))) {
+        nextNum = String(numero);
+      } else {
+        nextNum = (Math.max(0, ...nums, ...proyNums) + 1).toString();
+      }
       const cleanItems = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
       const total = cleanItems.reduce((s,it)=>s+(it.qty*it.rate),0);
-      const todayISO = new Date().toISOString().slice(0,10);
+      const invDate = fecha || new Date().toISOString().slice(0,10);
       D.facturas.push({
         id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
-        number: nextNum, empresa: emp, date: todayISO, dueDate: todayISO,
+        number: nextNum, empresa: emp, date: invDate, dueDate: invDate,
         billTo, shipTo: billTo, amount: total, items: cleanItems,
         item: projectName || cleanItems[0]?.desc || '', projectName: projectName || cleanItems[0]?.desc || '',
-        note: '', sent: false
+        note: note || '', sent: false
       });
       saveToDisk();
       return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`, changed: true };
@@ -598,20 +603,23 @@ app.post('/api/claude', auth, async (q, r) => {
       },
       {
         name: 'create_invoice',
-        description: 'Crea una factura nueva completa (con número automático siguiente en la secuencia, listo para guardar). Úsala cuando el usuario pida generar/crear una factura por voz o texto, describiendo el cliente y el trabajo. Si el usuario menciona un cliente que ya existe en las direcciones guardadas o en facturas anteriores, usa exactamente ese mismo nombre para que se reconozca. Si el usuario dice que es "como" un trabajo anterior, usa esa factura anterior como plantilla para la descripción/ítems.',
+        description: 'Crea una factura nueva completa con sus ítems detallados (número automático siguiente en la secuencia, salvo que pases "numero"). Úsala cuando el usuario pida generar/crear una factura por voz o texto, describiendo el cliente y el trabajo, O cuando el usuario suba una foto de una factura nueva y quiera que quede registrada exactamente con esa descripción/ítems (en ese caso, pasa el mismo "numero" que usaste en create_project para que ambos coincidan). Si el usuario menciona un cliente que ya existe en las direcciones guardadas o en facturas anteriores, usa exactamente ese mismo nombre para que se reconozca. Si el usuario dice que es "como" un trabajo anterior, usa esa factura anterior como plantilla para la descripción/ítems.',
         input_schema: {
           type: 'object',
           properties: {
             billTo: { type: 'string', description: 'Nombre del cliente/edificio a facturar' },
             projectName: { type: 'string', description: 'Nombre del proyecto/trabajo' },
+            numero: { type: 'string', description: 'Número de factura explícito (ej. para que coincida con el número de proyecto ya creado). Si ese número ya está en uso, se ignora y se autonumera.' },
+            fecha: { type: 'string', description: 'Fecha de la factura en formato YYYY-MM-DD, si se puede leer de una foto; si no, se usa la fecha de hoy' },
+            note: { type: 'string', description: 'Nota al pie de la factura, si aplica' },
             items: {
               type: 'array',
-              description: 'Ítems de la factura',
+              description: 'Ítems de la factura. Si vienes de una foto, lee la descripción/scope of work tal cual aparece — no la resumas ni la acortes.',
               items: {
                 type: 'object',
                 properties: {
                   desc: { type: 'string', description: 'Descripción corta del ítem' },
-                  detail: { type: 'string', description: 'Detalle/scope of work más largo (opcional)' },
+                  detail: { type: 'string', description: 'Detalle/scope of work más largo (opcional) — si la foto tiene un párrafo de descripción del trabajo, va aquí completo' },
                   qty: { type: 'number', description: 'Cantidad, normalmente 1' },
                   rate: { type: 'number', description: 'Precio de ese ítem en dólares' }
                 },
