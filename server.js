@@ -639,6 +639,38 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       saveToDisk();
       return { resultMsg: `Documento "${nombreDocumento || 'Documento'}" guardado en la ficha de "${e.nombre}".`, changed: true };
     }
+    if (toolName === 'limpiar_cobros_duplicados') {
+      // Groups cobros by project number within this company. For any group with more than one
+      // record: if at least one is "Pagado", delete the rest (the leftover "Pendiente" ghosts
+      // from the old register_cobro bug) and keep only the Pagado one. If a group has duplicates
+      // but NONE is Pagado, it's ambiguous (could be legit separate partial payments) — leave it
+      // alone and report it so a human decides instead of guessing.
+      const groups = {};
+      D.cobros.forEach(c => {
+        if ((c.empresa||'BH Pro') !== emp) return;
+        const key = c.num;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(c);
+      });
+      let eliminados = 0;
+      const idsAEliminar = new Set();
+      const ambiguos = [];
+      Object.entries(groups).forEach(([num, arr]) => {
+        if (arr.length < 2) return;
+        const pagados = arr.filter(c => c.estado === 'Pagado');
+        if (pagados.length >= 1) {
+          // Keep exactly one Pagado (the first), delete everything else in this group
+          const keepId = pagados[0].id;
+          arr.forEach(c => { if (c.id !== keepId) { idsAEliminar.add(c.id); eliminados++; } });
+        } else {
+          ambiguos.push(num);
+        }
+      });
+      D.cobros = D.cobros.filter(c => !idsAEliminar.has(c.id));
+      if (eliminados > 0) saveToDisk();
+      const ambigTxt = ambiguos.length ? ` Quedaron ${ambiguos.length} proyecto(s) con duplicados que NO toqué porque ninguno está marcado "Pagado" (podrían ser pagos parciales legítimos): ${ambiguos.join(', ')} — revísalos tú manualmente.` : '';
+      return { resultMsg: `Se eliminaron ${eliminados} registro(s) de cobro duplicados, dejando un solo registro "Pagado" por proyecto.${ambigTxt}`, changed: eliminados > 0 };
+    }
     return { resultMsg: `Error: herramienta desconocida "${toolName}".`, changed: false };
   } catch (e) {
     return { resultMsg: `Error ejecutando ${toolName}: ${e.message}`, changed: false };
@@ -791,6 +823,11 @@ app.post('/api/claude', auth, async (q, r) => {
           },
           required: ['nombreEmpleado']
         }
+      },
+      {
+        name: 'limpiar_cobros_duplicados',
+        description: 'Busca y elimina cobros duplicados (más de un registro para el mismo # de proyecto). Solo borra los duplicados "Pendiente" cuando YA existe uno "Pagado" para ese mismo proyecto — deja intacto cualquier caso ambiguo (varios "Pendiente" sin ningún "Pagado", que podrían ser pagos parciales legítimos) y te avisa cuáles quedaron sin tocar. Úsala cuando el usuario pida limpiar/eliminar cobros duplicados que ya identificaste o que él te señale.',
+        input_schema: { type: 'object', properties: {} }
       }
     ];
 
