@@ -359,6 +359,11 @@ select option{background:var(--black-3);}
     </div>
     <div id="pd-split-row" class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px;"></div>
 
+    <div id="pd-factura-section" style="display:none;margin-bottom:16px;">
+      <div class="sl">📄 Factura</div>
+      <div id="pd-factura-box" style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;font-size:.75rem;"></div>
+    </div>
+
     <div class="sl" data-i18n="sl.agregar_gasto">+ Agregar Gasto</div>
     <div class="fg"><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="pd-g-cat"><option>Materiales</option><option>Herramientas</option><option>Renta</option><option>Combustible</option><option>Otro</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="pd-g-monto" placeholder="0" min="0" step="0.01"></div></div>
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="pd-g-desc" placeholder="Pintura, cinta..."></div>
@@ -371,6 +376,16 @@ select option{background:var(--black-3);}
     <div class="fg"><div><div class="fl" data-i18n="fld.tarifa">Tarifa $</div><input type="number" id="pd-n-tarifa" placeholder="0" min="0" step="0.01" oninput="pdCalcNominaTotal()"></div><div><div class="fl" data-i18n="fld.total_pagado">Total Pagado $</div><input type="number" id="pd-n-total" placeholder="0" min="0" step="0.01"></div></div>
     <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="addNominaToProject()" data-i18n="btn.agregar_nomina_pd">+ Agregar Nómina</button>
     <div id="pd-nomina-list" style="max-height:140px;overflow-y:auto;font-size:.7rem;"></div>
+  </div>
+</div>
+
+<div id="fv-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,10,20,.9);padding:16px;overflow-y:auto;">
+  <div style="max-width:480px;margin:0 auto;background:var(--black-2);border:1px solid #2a4d80;border-radius:12px;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div id="fv-title" style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);"></div>
+      <button class="del" onclick="closeInvoiceView()">✕</button>
+    </div>
+    <div id="fv-body" style="font-size:.8rem;color:var(--white);line-height:1.5;"></div>
   </div>
 </div>
 
@@ -1044,6 +1059,49 @@ function renderProjectDetail() {
       <span>${n.empleado} — ${n.horas}h</span>
       <span style="color:var(--green);">${fmt(n.total)} <button class="del" onclick="delNominaFromProject('${n.id}')">✕</button></span>
     </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin pagos aún.','No payments yet.')}</span>`;
+  const facturaSection = document.getElementById('pd-factura-section');
+  const facturasProy = S.facturas.filter(f=>f.number===PD_CURRENT_NUM && (f.empresa||'BH Pro')===ACTIVE_COMPANY);
+  if (facturasProy.length) {
+    facturaSection.style.display = 'block';
+    document.getElementById('pd-factura-box').innerHTML = facturasProy.map(f => `
+      <div style="display:flex;justify-content:space-between;align-items:center;${facturasProy.length>1?'padding:6px 0;border-bottom:1px solid #222;':''}">
+        <div>
+          <div style="color:var(--white);">#${f.number} — ${f.billTo||''}</div>
+          <div style="color:var(--gray);font-size:.68rem;">${fd(f.date)} · ${(f.items||[]).length} ítem(s) · ${fmt(f.amount||0)}</div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="viewInvoiceDetail('${f.id}')">👁 Ver</button>
+      </div>`).join('');
+  } else {
+    facturaSection.style.display = 'none';
+  }
+}
+function viewInvoiceDetail(facturaId) {
+  const f = S.facturas.find(x=>x.id===facturaId);
+  if (!f) return;
+  document.getElementById('fv-title').textContent = `Factura #${f.number}`;
+  const itemsHtml = (f.items && f.items.length) ? f.items.map(it => `
+    <div style="border-bottom:1px solid #222;padding:8px 0;">
+      <div style="font-weight:600;color:var(--white);">${it.desc||''}</div>
+      ${it.detail ? `<div style="color:var(--gray);font-size:.72rem;margin-top:3px;white-space:pre-wrap;">${it.detail}</div>` : ''}
+      <div style="display:flex;justify-content:space-between;margin-top:4px;color:var(--gray);font-size:.72rem;">
+        <span>${tt('Cant','Qty')}: ${it.qty||1} × ${fmt(it.rate||0)}</span>
+        <span style="color:var(--gold);font-weight:600;">${fmt((it.qty||1)*(it.rate||0))}</span>
+      </div>
+    </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin ítems detallados.','No detailed items.')}</span>`;
+  document.getElementById('fv-body').innerHTML = `
+    <div style="margin-bottom:8px;"><b>Bill To:</b> ${f.billTo||''}</div>
+    <div style="margin-bottom:8px;"><b>${tt('Fecha','Date')}:</b> ${fd(f.date)}</div>
+    ${f.billAddress ? `<div style="margin-bottom:8px;"><b>${tt('Dirección','Address')}:</b> ${f.billAddress}</div>` : ''}
+    ${f.billPhone ? `<div style="margin-bottom:8px;"><b>${tt('Teléfono','Phone')}:</b> ${f.billPhone}</div>` : ''}
+    <div style="margin:12px 0 6px;color:var(--gold);font-weight:600;">${tt('Ítems','Items')}</div>
+    ${itemsHtml}
+    ${f.note ? `<div style="margin-top:12px;color:var(--gray);font-size:.75rem;"><b>${tt('Nota','Note')}:</b> ${f.note}</div>` : ''}
+    <div style="margin-top:14px;padding-top:10px;border-top:1px solid #2a4d80;font-size:1.05rem;font-weight:700;color:var(--gold);text-align:right;">Total: ${fmt(f.amount||0)}</div>
+  `;
+  document.getElementById('fv-modal').style.display = 'block';
+}
+function closeInvoiceView() {
+  document.getElementById('fv-modal').style.display = 'none';
 }
 
 function pdCalcNominaTotal() {
@@ -2659,7 +2717,7 @@ function renderFacturas() {
     const isPaid = cobro && cobro.estado==='Pagado';
     const paidBadge = isPaid ? '<span style="font-size:.6rem;color:#2ECC8A;margin-left:4px;">💰 Pagada</span>' : '<span style="font-size:.6rem;color:var(--red);margin-left:4px;">⏳ Pendiente de pago</span>';
     const sentBadge = f.sent ? '<span style="font-size:.6rem;color:#4a9caf;margin-left:4px;">✓ Enviada</span>' : '';
-    return`<div class="inv-card"><div class="inv-check ${sel?'selected':''}" onclick="toggleInvoiceSelect('${f.id}')"></div><div class="inv-num" style="cursor:pointer;text-decoration:underline;" onclick="openProjectDetailByNum('${f.number}')">#${f.number}</div><div class="inv-info"><div class="inv-name">${f.item||f.projectName||'Invoice'}${sentBadge}${paidBadge}</div><div class="inv-meta">${f.billTo||''} · ${fmt(f.amount)} · ${fd(f.date)}</div></div><div class="inv-actions"><button class="btn btn-sm" onclick="downloadInvoicePDF('${f.id}')">PDF</button><button class="btn btn-sm" style="background:#1B3A6B;" onclick="openEmailModal('${f.id}')">✉</button><button class="del" onclick="delInvoice('${f.id}')">✕</button></div></div>`;
+    return`<div class="inv-card"><div class="inv-check ${sel?'selected':''}" onclick="toggleInvoiceSelect('${f.id}')"></div><div class="inv-num" style="cursor:pointer;text-decoration:underline;" onclick="openProjectDetailByNum('${f.number}')">#${f.number}</div><div class="inv-info"><div class="inv-name">${f.item||f.projectName||'Invoice'}${sentBadge}${paidBadge}</div><div class="inv-meta">${f.billTo||''} · ${fmt(f.amount)} · ${fd(f.date)}</div></div><div class="inv-actions"><button class="btn btn-sm btn-outline" onclick="viewInvoiceDetail('${f.id}')">👁</button><button class="btn btn-sm" onclick="downloadInvoicePDF('${f.id}')">PDF</button><button class="btn btn-sm" style="background:#1B3A6B;" onclick="openEmailModal('${f.id}')">✉</button><button class="del" onclick="delInvoice('${f.id}')">✕</button></div></div>`;
   }).join('');
 }
 
