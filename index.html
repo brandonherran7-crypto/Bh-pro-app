@@ -263,6 +263,12 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadDataDiag()">🔍 Verificar Persistencia</button>
     <div id="data-diag-result" style="font-size:.72rem;font-family:monospace;white-space:pre-wrap;word-break:break-word;background:#0a1628;padding:8px;border-radius:6px;"></div>
   </div>
+  <div class="card admin-only" style="display:none;border:1px solid #FF6B6B33;">
+    <div class="card-title">🔍 Cobros Duplicados</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Cada proyecto debería tener un solo registro de cobro. Si un pago se registró creando uno nuevo en vez de actualizar el que ya existía, aquí puedes verlos y borrar el que sobra.</p>
+    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadCobrosDuplicados()">🔍 Buscar Duplicados</button>
+    <div id="cobros-dup-result" style="font-size:.75rem;"></div>
+  </div>
   <div class="card admin-only" style="display:none;border:1px solid #E74C3C33;">
     <div class="card-title" data-i18n="ct.debug_asistente">🐛 Diagnóstico del Asistente IA</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.debug_desc">Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.</p>
@@ -491,14 +497,26 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;" onclick="addClienteNuevo()">➕ Guardar Cliente</button>
   </div>
   <div class="search-bar"><span style="color:var(--gold)">🔍</span><input type="text" id="sq-c" placeholder="Buscar factura, estado, cheque..." oninput="renderCobro()"></div>
+  <div class="fg" style="margin-bottom:8px;"><div><div class="fl">Ordenar por</div><select id="c-sort-field" onchange="renderCobro()">
+    <option value="num">#</option>
+    <option value="cliente">Cliente</option>
+    <option value="monto">Monto</option>
+    <option value="fecha">Fecha</option>
+    <option value="cheque">#Cheque/Wire</option>
+    <option value="estado">Estado</option>
+  </select></div><div><div class="fl">Dirección</div><select id="c-sort-dir" onchange="renderCobro()">
+    <option value="desc">Mayor a menor / Más reciente</option>
+    <option value="asc">Menor a mayor / Más antiguo</option>
+  </select></div></div>
   <div class="sinfo" id="si-c"></div>
   <div class="stats3">
     <div class="sc"><div class="sv g" id="ct-pag">$0</div><div class="sl2" data-i18n="lbl.cobrado">Cobrado</div></div>
     <div class="sc"><div class="sv" id="ct-pen">$0</div><div class="sl2" data-i18n="lbl.pendiente">Pendiente</div></div>
     <div class="sc"><div class="sv" id="ct-tot">$0</div><div class="sl2" data-i18n="lbl.total_facturado">Total Facturado</div></div>
   </div>
-  <div class="tw"><table><thead><tr><th>#</th><th data-i18n="fld.cliente">Cliente</th><th data-i18n="th.monto">Monto</th><th data-i18n="fld.fecha">Fecha</th><th data-i18n="th.tipo">Tipo</th><th data-i18n="th.cheque">#Cheque</th><th data-i18n="fld.estado">Estado</th><th></th></tr></thead><tbody id="tb-c"></tbody></table></div>
+  <div class="tw"><table><thead><tr><th style="cursor:pointer;" onclick="setCobroSort('num')">#</th><th style="cursor:pointer;" onclick="setCobroSort('cliente')" data-i18n="fld.cliente">Cliente</th><th style="cursor:pointer;" onclick="setCobroSort('monto')" data-i18n="th.monto">Monto</th><th style="cursor:pointer;" onclick="setCobroSort('fecha')" data-i18n="fld.fecha">Fecha</th><th data-i18n="th.tipo">Tipo</th><th style="cursor:pointer;" onclick="setCobroSort('cheque')" data-i18n="th.cheque">#Cheque</th><th style="cursor:pointer;" onclick="setCobroSort('estado')" data-i18n="fld.estado">Estado</th><th></th></tr></thead><tbody id="tb-c"></tbody></table></div>
 </div>
+
 
 <!-- FACTURAS -->
 <div class="section" id="facturas">
@@ -2047,6 +2065,43 @@ async function loadBackupsList() {
   }
 }
 
+async function loadCobrosDuplicados() {
+  const box = document.getElementById('cobros-dup-result');
+  box.textContent = tt('Buscando...','Searching...');
+  try {
+    const res = await fetch('/api/cobros/duplicados', {credentials:'same-origin'});
+    const raw = await res.text();
+    let d;
+    try { d = JSON.parse(raw); }
+    catch(e) { box.textContent = tt('Respuesta inesperada del servidor: ','Unexpected server response: ') + raw.slice(0,300); return; }
+    if (!res.ok) { box.textContent = tt('Error: ','Error: ') + (d.error||''); return; }
+    if (!d.duplicados || !d.duplicados.length) {
+      box.innerHTML = `<span style="color:var(--green);">✅ ${tt('No se encontraron duplicados.','No duplicates found.')}</span>`;
+      return;
+    }
+    box.innerHTML = d.duplicados.map(grupo => {
+      const rows = grupo.map(c => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
+          <span>${c.estado} — ${fmt(c.monto)} — ${fd(c.fecha)} ${c.cheque?('— '+c.cheque):''}</span>
+          <button class="del" onclick="delCobroDuplicado('${c.id}')">✕</button>
+        </div>`).join('');
+      return `<div style="margin-bottom:10px;background:#1a0a0a;border:1px solid #E74C3C55;border-radius:6px;padding:8px;">
+        <div style="color:var(--gold);font-weight:600;margin-bottom:4px;">Proyecto #${grupo[0].num} (${grupo[0].empresa||'BH Pro'}) — ${grupo.length} registros</div>
+        ${rows}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    box.textContent = tt('Error de red: ','Network error: ') + e.message;
+  }
+}
+async function delCobroDuplicado(id) {
+  if (!confirm(tt('¿Eliminar este registro de cobro?','Delete this cobro record?'))) return;
+  S.cobros = S.cobros.filter(c => c.id !== id);
+  await deleteServerItem('cobros', id);
+  await loadData();
+  renderAll();
+  loadCobrosDuplicados();
+}
 async function loadDataDiag() {
   const box = document.getElementById('data-diag-result');
   box.textContent = tt('Verificando...','Checking...');
@@ -2814,13 +2869,37 @@ function renderNomina() {
   if(annEl)annEl.innerHTML=Object.entries(emp).sort((a,b)=>b[1]-a[1]).map(([e,t])=>`<tr><td>${e}</td><td style="color:var(--green)">${fmt(t)}</td></tr>`).join('');
 }
 
+function setCobroSort(field) {
+  const fieldSel = document.getElementById('c-sort-field');
+  const dirSel = document.getElementById('c-sort-dir');
+  if (!fieldSel || !dirSel) return;
+  if (fieldSel.value === field) {
+    // Clicking the same header again flips the direction, like any normal sortable table
+    dirSel.value = dirSel.value === 'desc' ? 'asc' : 'desc';
+  } else {
+    fieldSel.value = field;
+    dirSel.value = (field === 'num' || field === 'fecha' || field === 'monto') ? 'desc' : 'asc';
+  }
+  renderCobro();
+}
 function renderCobro() {
   const q=(document.getElementById('sq-c')?.value||'').toLowerCase().trim();
+  const sortField = document.getElementById('c-sort-field')?.value || 'num';
+  const sortDir = document.getElementById('c-sort-dir')?.value || 'desc';
   const proyNums = proyNumsEmpresaActiva();
   const cobrosEmpresa = S.cobros.filter(c=> c.empresa ? c.empresa===ACTIVE_COMPANY : proyNums.has(c.num));
   const list=q?cobrosEmpresa.filter(c=>(c.num||'').toLowerCase().includes(q)||(c.cliente||'').toLowerCase().includes(q)||(c.estado||'').toLowerCase().includes(q)||(c.cheque||'').toLowerCase().includes(q)):cobrosEmpresa;
+  const sorted = list.slice().sort((a,b) => {
+    let av, bv;
+    if (sortField === 'num' || sortField === 'monto') { av = parseFloat(a[sortField])||0; bv = parseFloat(b[sortField])||0; }
+    else if (sortField === 'fecha') { av = a.fecha||''; bv = b.fecha||''; }
+    else { av = (a[sortField]||'').toString().toLowerCase(); bv = (b[sortField]||'').toString().toLowerCase(); }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
   let pag=0,pen=0;
-  document.getElementById('tb-c').innerHTML=list.slice().reverse().map(c=>{
+  document.getElementById('tb-c').innerHTML=sorted.map(c=>{
     if(c.estado==='Pagado')pag+=c.monto;else pen+=c.monto;
     const ec=c.estado==='Pagado'?'bp':'bpen';
     const fotoBtn=c.foto?`<button class="btn btn-sm" style="background:#1B3A6B;" onclick="viewCobroFoto('${c.id}')">📷</button>`:'';
@@ -2830,7 +2909,7 @@ function renderCobro() {
   document.getElementById('ct-pen').textContent=fmt(pen);
   document.getElementById('ct-tot').textContent=fmt(pag+pen);
   const si=document.getElementById('si-c');
-  if(si)si.textContent=q?list.length+' · Total: '+fmt(pag+pen):'';
+  if(si)si.textContent=q?sorted.length+' · Total: '+fmt(pag+pen):'';
 }
 
 function renderFacturas() {
@@ -3032,6 +3111,8 @@ async function sendClaude() {
   const cobrosEmpList = S.cobros.filter(c=>(c.empresa?c.empresa===ACTIVE_COMPANY:true)).map(c=>`Proyecto #${c.num} — $${c.monto} — ${c.estado} — ${c.fecha||''}`).join('; ');
   const nominaEmpList = S.nomina.filter(n=>(n.empresa?n.empresa===ACTIVE_COMPANY:true)).map(n=>`${n.fecha||'?'} — Proyecto #${n.proy||'?'} — ${n.empleado} — ${n.horas}hrs @ $${n.tarifa} — Total: $${n.total}${n.notas?` — ${n.notas}`:''}`).join('\n');
   const gastosEmpList = S.gastos.filter(g=>(g.empresa?g.empresa===ACTIVE_COMPANY:true)).map(g=>`${g.fecha||'?'} — ${g.proy?`Proyecto #${g.proy}`:'General'} — ${g.cat} — $${g.monto}${g.desc?` — ${g.desc}`:''}`).join('\n');
+  const empleadosFichaList = (S.empleados||[]).filter(e=>(e.empresa||'BH Pro')===ACTIVE_COMPANY).map(e=>`"${e.nombre}" — tel:${e.telefono||'?'} — email:${e.email||'?'} — tarifa:$${e.tarifaHabitual||0} — docs:${(e.documentos||[]).length}${e.w9?'+W9legado':''}`).join('; ');
+  const nombresConPagoNomina = [...new Set(S.nomina.filter(n=>(n.empresa?n.empresa===ACTIVE_COMPANY:true)).map(n=>n.empleado))].join(', ');
   const ctx = `Eres el asistente de BH Pro Services LLC / Kratos, empresa de pintura y servicios en South Florida. Empresa activa ahora: ${ACTIVE_COMPANY}.
 Datos actuales: Cobrado: ${fmt(t.cob)}, Pendiente: ${fmt(t.pen)}, Gastos: ${fmt(t.tg)}, Nómina: ${fmt(t.tn)}, Ganancia bruta: ${fmt(t.gan)}, Tu parte 50%: ${fmt(t.brandon)}, Arlene 50%: ${fmt(t.arlene)}, Falta Arlene: ${fmt(t.afalta)}, Proyectos: ${S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).length}.
 Clientes/direcciones guardadas: ${savedLocs || '(ninguna guardada aún)'}
@@ -3041,6 +3122,10 @@ Nómina/pagos a empleados registrados (todos, para responder preguntas como "cu�
 ${nominaEmpList || '(sin nómina registrada aún)'}
 Gastos registrados (todos, para responder preguntas sobre materiales/gastos por proyecto):
 ${gastosEmpList || '(sin gastos registrados aún)'}
+Fichas de empleados ya guardadas (nombre, teléfono, email, tarifa habitual, cuántos documentos tiene):
+${empleadosFichaList || '(ninguna ficha guardada aún)'}
+Nombres de empleados que aparecen en el historial de nómina pero podrían no tener ficha completa todavía: ${nombresConPagoNomina || '(ninguno)'}
+Cuando el usuario pida crear, actualizar, o "generar una ficha" para uno o varios empleados (con teléfono, correo, tarifa, notas, o adjuntando una foto de un W9/documento), usa create_empleado de inmediato — no expliques que "no tienes esa herramienta", sí la tienes. Si pide fichas para TODOS los empleados que ya tiene (ej. los nombres del historial de nómina de arriba), llama a create_empleado UNA VEZ POR CADA NOMBRE en el mismo turno, sin detenerte a preguntar uno por uno; usa solo el nombre si no te da más datos, y pregunta al final si quiere que completes teléfono/tarifa para alguno en especial. Si el usuario sube una foto de un W9 u otro documento y menciona a qué empleado pertenece, usa add_empleado_documento (o pásalo directamente en create_empleado si también estás creando/actualizando esa ficha en el mismo mensaje). Estas fichas SÍ se guardan de forma persistente en la app, visibles y editables en la pestaña Nómina.
 Todas las facturas históricas, ordenadas de la MÁS RECIENTE a la más antigua (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes — la primera que coincida con el cliente mencionado es la más reciente de ese cliente):
 ${recentInvoices || '(sin facturas aún)'}
 Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project de inmediato, sin hacer preguntas innecesarias. Reglas para decidir con la información disponible en vez de preguntar:
