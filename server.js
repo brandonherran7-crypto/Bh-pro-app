@@ -14,6 +14,9 @@ const PWD=process.env.APP_PASSWORD||'16720419Brh!',ARLENE_PWD=process.env.ARLENE
 // Without a Persistent Disk this still protects you from crashes/restarts between deploys, but a
 // fresh deploy will reset to the seed data below. Recommended: add a Disk and set DATA_DIR=/data.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
+if (process.env.DATA_DIR && !process.env.DATA_DIR.startsWith('/')) {
+  console.error('⚠️⚠️⚠️ DATA_DIR is set to "' + process.env.DATA_DIR + '" but it does NOT start with "/" — this is a RELATIVE path, which means it is NOT pointing at your persistent disk mount. Your data WILL be wiped on every deploy/restart until you fix this. Go to Render → Environment → DATA_DIR and set it to the exact Mount Path shown under Disks (usually "/data").');
+}
 const DATA_FILE = path.join(DATA_DIR, 'bhpro-data.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const MAX_BACKUPS = 30; // keep the last 30 automatic backups (rolling window)
@@ -173,12 +176,15 @@ app.get('/api/data/diag', adminAuth, (q, r) => {
       fs.unlinkSync(testFile);
       diskWritable = true;
     } catch (e) { diskWriteError = e.message; }
+    const envDataDirIsRelative = !!envDataDir && !envDataDir.startsWith('/');
     r.json({
       envDataDirSet: !!envDataDir,
       envDataDirValue: envDataDir,
+      envDataDirIsRelative,
       resolvedDataDir: DATA_DIR,
       resolvedDataFile: DATA_FILE,
-      isUsingPersistentDisk: !!envDataDir && envDataDir !== __dirname,
+      isUsingPersistentDisk: !!envDataDir && envDataDir !== __dirname && !envDataDirIsRelative,
+      warning: envDataDirIsRelative ? `DATA_DIR="${envDataDir}" no empieza con "/" — es una ruta RELATIVA, no apunta al disco persistente real. Ve a Render → Environment → DATA_DIR y ponle el Mount Path exacto que aparece en Disks (normalmente "/data").` : null,
       dataFileExists, dataFileSize, dataFileModified,
       backupCount, newestBackup,
       diskWritable, diskWriteError,
@@ -437,7 +443,7 @@ app.listen(PORT,()=>console.log(`BH Pro running on port ${PORT}`));
 // Executes a single tool call and returns { resultMsg, changed }. Used inside the agentic loop
 // in /api/claude so Claude can call tools repeatedly in one turn (e.g. registering 20 rows from
 // an imported Excel file), not just once.
-function executeAiTool(toolName, input, empresa) {
+function executeAiTool(toolName, input, empresa, imageDataUrl) {
   const emp = empresa || 'BH Pro';
   input = input || {};
   try {
@@ -501,7 +507,7 @@ function executeAiTool(toolName, input, empresa) {
       return { resultMsg: `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`, changed: true };
     }
     if (toolName === 'register_cobro') {
-      const { proyectoNum, monto, fecha, notas } = input;
+      const { proyectoNum, monto, fecha, notas, numeroReferencia } = input;
       if (!proyectoNum || monto === undefined || !monto) return { resultMsg: 'Error: faltan datos o el monto es cero (proyectoNum o monto) para registrar el cobro.', changed: false };
       const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
       if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
@@ -509,12 +515,14 @@ function executeAiTool(toolName, input, empresa) {
         id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         num: proyectoNum, cliente: proj.cliente||'', monto: monto||0,
         fecha: fecha || new Date().toISOString().slice(0,10),
-        estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: '',
+        estado: 'Pagado', tipo: 'Transferencia bancaria', cheque: numeroReferencia || '',
         fpago: fecha || new Date().toISOString().slice(0,10), empresa: emp,
-        notas: notas || 'Registrado por asistente'
+        notas: notas || 'Registrado por asistente',
+        foto: imageDataUrl || ''
       });
       saveToDisk();
-      return { resultMsg: `Cobro de $${(monto||0).toFixed(2)} registrado para el proyecto #${proyectoNum} "${proj.nombre}". Ya está guardado en Cobros.`, changed: true };
+      const refTxt = numeroReferencia ? ` (ref. ${numeroReferencia})` : '';
+      return { resultMsg: `Cobro de $${(monto||0).toFixed(2)} registrado para el proyecto #${proyectoNum} "${proj.nombre}"${refTxt}${imageDataUrl ? ', con el comprobante adjunto guardado' : ''}. Ya está guardado en Cobros.`, changed: true };
     }
     if (toolName === 'register_gasto') {
       const { proyectoNum, categoria, monto, descripcion } = input;
@@ -528,12 +536,12 @@ function executeAiTool(toolName, input, empresa) {
         id: 'gas_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         fecha: new Date().toISOString().slice(0,10),
         proy: proyectoNum || '', cat: categoria || 'Otros', monto: monto||0,
-        desc: descripcion, recibo: '', foto: '', empresa: emp
+        desc: descripcion, recibo: '', foto: imageDataUrl || '', empresa: emp
       });
       saveToDisk();
-      return { resultMsg: proyectoNum
+      return { resultMsg: (proyectoNum
         ? `Gasto de $${(monto||0).toFixed(2)} ("${descripcion}") registrado para el proyecto #${proyectoNum} "${proj.nombre}".`
-        : `Gasto general de $${(monto||0).toFixed(2)} ("${descripcion}") registrado sin ligar a ningún proyecto.`, changed: true };
+        : `Gasto general de $${(monto||0).toFixed(2)} ("${descripcion}") registrado sin ligar a ningún proyecto.`) + (imageDataUrl ? ' Recibo adjunto guardado.' : ''), changed: true };
     }
     if (toolName === 'register_nomina') {
       const { proyectoNum, empleado, horas, tarifa, total } = input;
@@ -639,7 +647,8 @@ app.post('/api/claude', auth, async (q, r) => {
             proyectoNum: { type: 'string', description: 'Número del proyecto al que corresponde este pago (debe existir en la lista de proyectos actuales)' },
             monto: { type: 'number', description: 'Monto del pago en dólares, leído del comprobante' },
             fecha: { type: 'string', description: 'Fecha del pago en formato YYYY-MM-DD, si se puede leer del comprobante; si no, usar la fecha de hoy' },
-            notas: { type: 'string', description: 'Notas adicionales, ej. nombre del remitente o número de referencia del wire' }
+            numeroReferencia: { type: 'string', description: 'Número de confirmación/referencia del wire, o número de cheque, si aparece en la imagen — guárdalo tal cual se ve, dígitos y letras incluidos' },
+            notas: { type: 'string', description: 'Notas adicionales, ej. nombre del remitente' }
           },
           required: ['proyectoNum', 'monto']
         }
@@ -721,8 +730,9 @@ app.post('/api/claude', auth, async (q, r) => {
       const toolUseBlocks = data.content.filter(b => b.type === 'tool_use');
       if (!toolUseBlocks.length) break;
       messages.push({ role: 'assistant', content: data.content });
+      const imageDataUrl = (image && image.base64) ? `data:${image.mediaType || 'image/jpeg'};base64,${image.base64}` : null;
       const toolResults = toolUseBlocks.map(toolUse => {
-        const { resultMsg, changed } = executeAiTool(toolUse.name, toolUse.input, empresa);
+        const { resultMsg, changed } = executeAiTool(toolUse.name, toolUse.input, empresa, imageDataUrl);
         if (changed) { dataChanged = true; changedCount++; }
         allResultMsgs.push(resultMsg);
         return { type: 'tool_result', tool_use_id: toolUse.id, content: resultMsg };
