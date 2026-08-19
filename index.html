@@ -605,7 +605,7 @@ select option{background:var(--black-3);}
     <div id="cxls-preview" style="display:none;padding:6px 10px 0;"><span style="background:#1B3A6B;color:var(--gold);padding:4px 10px;border-radius:6px;font-size:.7rem;">📊 <span id="cxls-preview-name"></span> <button onclick="clearChatExcel()" style="background:none;border:none;color:#E74C3C;cursor:pointer;font-weight:bold;">✕</button></span></div>
     <input type="file" id="cimg-input" accept="image/*" style="display:none;" onchange="handleChatImageSelect(event)">
     <input type="file" id="cxls-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleChatExcelSelect(event)">
-    <div class="cinput-area" style="align-items:flex-end;"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cxls-input').click()" style="background:#1B6B3A;margin-right:4px;" title="Adjuntar Excel/CSV">📊</button><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto de comprobante">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
+    <div class="cinput-area" style="align-items:flex-end;"><textarea class="cinput" id="cinput" rows="1" placeholder="Pregúntame algo..." oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendClaude();}"></textarea><button class="csend" onclick="document.getElementById('cxls-input').click()" style="background:#1B6B3A;margin-right:4px;" title="Adjuntar Excel/CSV">📊</button><button class="csend" onclick="document.getElementById('cimg-input').click()" style="background:#2a4d80;margin-right:4px;" title="Adjuntar foto (factura, comprobante, recibo)">📷</button><button class="csend" id="cmicbtn" onclick="toggleVoiceInput()" style="background:#2a4d80;margin-right:4px;" title="Dictar por voz">🎤</button><button class="csend" onclick="sendClaude()">➤</button></div>
   </div>
   <button class="cbtn" onclick="toggleClaude()">🤖</button>
 </div>
@@ -1291,6 +1291,12 @@ function viewGastoFoto(id){
   const w = window.open('');
   w.document.write(`<img src="${g.foto}" style="max-width:100%;">`);
 }
+function viewCobroFoto(id){
+  const c = S.cobros.find(x=>x.id===id);
+  if(!c||!c.foto) return;
+  const w = window.open('');
+  w.document.write(`<img src="${c.foto}" style="max-width:100%;">`);
+}
 
 function addNomina() {
   const tot = parseFloat(document.getElementById('n-tot').value)||0;
@@ -1880,6 +1886,9 @@ async function loadDataDiag() {
     const lines = [];
     if (d.isUsingPersistentDisk) {
       lines.push('✅ ' + tt('Usando disco persistente','Using persistent disk'));
+    } else if (d.envDataDirIsRelative) {
+      lines.push('🚨 ' + tt('DATA_DIR está mal escrito — le falta la "/" al inicio. Es una ruta relativa, NO el disco persistente.','DATA_DIR is misconfigured — missing leading "/". It\'s a relative path, NOT the persistent disk.'));
+      lines.push(tt('Arréglalo en Render → Environment → DATA_DIR (debe empezar con "/", ej: "/data")','Fix it in Render → Environment → DATA_DIR (must start with "/", e.g. "/data")'));
     } else {
       lines.push('❌ ' + tt('NO está usando disco persistente — los datos se van a borrar en el próximo deploy','NOT using persistent disk — data WILL be wiped on the next deploy'));
     }
@@ -2628,7 +2637,8 @@ function renderCobro() {
   document.getElementById('tb-c').innerHTML=list.slice().reverse().map(c=>{
     if(c.estado==='Pagado')pag+=c.monto;else pen+=c.monto;
     const ec=c.estado==='Pagado'?'bp':'bpen';
-    return`<tr><td><span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${c.num}')">${c.num}</span></td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.cliente||''}</td><td>${fmt(c.monto)}</td><td>${fd(c.fecha)}</td><td>${c.tipo||''}</td><td>${c.cheque||''}</td><td><span class="badge ${ec}" onclick="toggleCobro('${c.id}')">${c.estado}</span></td><td><button class="del" onclick="delC('${c.id}')">✕</button></td></tr>`;
+    const fotoBtn=c.foto?`<button class="btn btn-sm" style="background:#1B3A6B;" onclick="viewCobroFoto('${c.id}')">📷</button>`:'';
+    return`<tr><td><span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${c.num}')">${c.num}</span></td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.cliente||''}</td><td>${fmt(c.monto)}</td><td>${fd(c.fecha)}</td><td>${c.tipo||''}</td><td>${c.cheque||''}</td><td><span class="badge ${ec}" onclick="toggleCobro('${c.id}')">${c.estado}</span></td><td>${fotoBtn}<button class="del" onclick="delC('${c.id}')">✕</button></td></tr>`;
   }).join('');
   document.getElementById('ct-pag').textContent=fmt(pag);
   document.getElementById('ct-pen').textContent=fmt(pen);
@@ -2856,10 +2866,11 @@ Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las 
 - Después de crear la factura, resume en una sola frase corta qué hiciste (cliente, monto, qué cambiaste) — no listes preguntas ya respondidas.
 Cuando el usuario pida registrar un gasto, un pago de nómina/jornal a un empleado, usa register_gasto / register_nomina respectivamente. Siempre identifica a qué número de proyecto corresponde antes de usar estas herramientas (a menos que el usuario diga explícitamente que es un gasto general sin proyecto). Si no es claro a qué proyecto pertenece, pregunta antes de registrar nada.
 Si el usuario adjunta una imagen, primero identifica qué tipo de documento es:
-- Comprobante de pago/wire transfer/transferencia recibida: lee el monto, la fecha, y el remitente/cliente. Identifica a qué proyecto corresponde (por nombre del cliente o edificio) y usa register_cobro. Si no logras identificar con certeza el proyecto, pregunta antes de registrar nada.
-- Factura o recibo de un proveedor (ej. Home Depot, Sherwin Williams, alquiler de equipo): lee el monto, qué se compró, y la fecha. Identifica a qué proyecto corresponde si es posible (por contexto de la conversación o porque el usuario lo menciona) y usa register_gasto. Si no está claro a qué proyecto pertenece, pregunta, o si el usuario indica que es un gasto general, regístralo sin proyecto.
-- Una factura que TÚ (BH Pro/Kratos) emitiste antes (ej. el usuario la foto/screenshot como referencia para hacer una nueva parecida): úsala como plantilla si el usuario pide crear una factura similar, igual que harías con el historial de texto.
-Si la imagen no es clara o no puedes determinar con confianza qué tipo de documento es, dile al usuario qué ves y pregunta qué quiere que hagas — nunca adivines el proyecto o el tipo de registro si hay ambigüedad real.
+- Comprobante de pago/wire transfer/transferencia recibida: lee el monto, la fecha, el remitente/cliente, y el número de confirmación/referencia del wire si aparece en la imagen (pásalo en "numeroReferencia"). Identifica a qué proyecto corresponde (por nombre del cliente o edificio) y usa register_cobro — la foto del comprobante se guarda automáticamente junto con el registro, así que después vas a poder verla en la pestaña Cobros. Si no logras identificar con certeza el proyecto, pregunta antes de registrar nada.
+- Recibo de compra de un proveedor (ej. Home Depot, Sherwin Williams, alquiler de equipo): lee el monto, qué se compró, y la fecha. Identifica a qué proyecto corresponde si es posible (por contexto de la conversación o porque el usuario lo menciona) y usa register_gasto. Si no está claro a qué proyecto pertenece, pregunta, o si el usuario indica que es un gasto general, regístralo sin proyecto.
+- Una factura NUEVA que representa un trabajo/proyecto que hay que registrar en la app (ej. una factura en papel, un PDF fotografiado, o cualquier documento con número de factura, fecha, cliente/edificio y monto que todavía no está en el sistema): extrae TODOS estos datos exactos de la imagen — número de factura/proyecto, fecha, cliente, ubicación/edificio (ej. Acqualina, Palm Aire, o el nombre que aparezca), y el valor total. Usa el número de factura como el número de proyecto (parámetro "numero" en create_project) para que ambos coincidan siempre. Llama a create_project con esos datos. Antes de confirmar, dile al usuario en una lista corta exactamente qué leíste de la imagen (# factura, fecha, cliente, ubicación, valor) para que pueda corregirte si algo se leyó mal.
+- Una factura que TÚ (BH Pro/Kratos) emitiste antes (ej. el usuario la foto/screenshot como referencia para hacer una nueva parecida, no para registrarla de nuevo): úsala como plantilla si el usuario pide crear una factura similar, igual que harías con el historial de texto.
+Si la imagen no es clara o no puedes determinar con confianza qué tipo de documento es o algún dato clave (número, monto, cliente), dile al usuario qué sí lograste leer y qué no, y pregunta lo que falte — nunca inventes un número de factura, cliente, o monto que no puedas leer con confianza en la imagen.
 Si el usuario adjunta un archivo Excel/CSV (verás sus filas listadas como "Fila N: columna=valor, ..."), analiza qué tipo de datos son (proyectos, facturas, gastos, nómina, pagos/cobros) según los nombres de columna y su contenido. Luego, para CADA fila que tenga datos suficientes, llama a la herramienta correspondiente (create_project, create_invoice, register_gasto, register_nomina, o register_cobro) UNA VEZ POR FILA — puedes y debes llamar herramientas muchas veces seguidas en el mismo turno para procesar todas las filas, no te detengas después de la primera. Si una fila no tiene datos suficientes o es ambigua (ej. no se puede identificar el proyecto), sáltala y menciónalo al final en tu resumen, no te detengas a preguntar por cada fila individual — solo pregunta si TODO el archivo es ambiguo sobre qué tipo de datos contiene. Al terminar, da un resumen breve: cuántas filas procesaste con éxito y cuántas tuviste que saltar y por qué.
 No todo lo que el usuario te dice es para registrar algo nuevo — muchas veces solo quiere que CONSULTES o VERIFIQUES información que ya existe, usando los datos de arriba (proyectos, facturas, cobros, nómina, gastos). Ejemplos de preguntas de consulta que debes responder directamente con los datos que ya tienes, SIN usar ninguna herramienta de registro: "¿cuánto le he pagado a Manuel en total?", "¿el proyecto #1125 ya está pagado?", "¿el monto de la factura #1125 es $700?", "¿cuánto llevo gastado en materiales del proyecto X?", "¿cuántos proyectos de Acqualina están pendientes?". Para este tipo de preguntas, busca y calcula la respuesta directamente en los datos que ya tienes arriba (sumando, filtrando, comparando) y contesta con el número o dato exacto — no preguntes más información si ya la tienes disponible arriba, y no llames a ninguna herramienta de registro para simplemente responder una pregunta.
 Responde en español, conciso y directo.`;
