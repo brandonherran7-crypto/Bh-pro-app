@@ -389,6 +389,32 @@ select option{background:var(--black-3);}
   </div>
 </div>
 
+<div id="emp-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,10,20,.9);padding:16px;overflow-y:auto;">
+  <div style="max-width:480px;margin:0 auto;background:var(--black-2);border:1px solid #2a4d80;border-radius:12px;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div id="emp-modal-title" style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);"></div>
+      <button class="del" onclick="closeEmpleadoDetail()">✕</button>
+    </div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_empleado">Nombre</div><input type="text" id="emd-nombre"></div><div><div class="fl" data-i18n="fld.telefono">Teléfono</div><input type="text" id="emd-telefono"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.email">Correo</div><input type="text" id="emd-email"></div><div><div class="fl" data-i18n="fld.tarifa_habitual">Tarifa habitual $</div><input type="number" id="emd-tarifa" min="0" step="0.01"></div></div>
+    <div style="margin-bottom:10px;"><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="emd-notas"></div>
+    <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="saveEmpleadoEdit()">💾 Guardar Cambios</button>
+
+    <div class="stats" style="grid-template-columns:1fr;margin-bottom:16px;">
+      <div class="sc"><div class="sv g" id="emd-total-pagado">$0</div><div class="sl2">Total Pagado (histórico)</div></div>
+    </div>
+
+    <div class="sl">📎 Documentos</div>
+    <div id="emd-docs-list" style="margin-bottom:10px;font-size:.75rem;"></div>
+    <div style="margin-bottom:6px;"><div class="fl">Nombre del documento</div><input type="text" id="emd-doc-nombre" placeholder="W9, licencia, ID..."></div>
+    <div style="margin-bottom:10px;"><input type="file" id="emd-doc-file" accept="image/*,.pdf"></div>
+    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:16px;" onclick="addEmpleadoDocumento()">+ Agregar Documento</button>
+
+    <div class="sl">🧾 Historial de Pagos</div>
+    <div id="emd-pagos-list" style="max-height:180px;overflow-y:auto;font-size:.72rem;"></div>
+  </div>
+</div>
+
 <!-- LOCACIONES -->
 <div class="section" id="locaciones">
   <h1 class="page-title" data-i18n="title.locaciones">Locaciones</h1>
@@ -1415,13 +1441,111 @@ function renderEmpleadoList() {
   const empleados = S.empleados.filter(e => (e.empresa||'BH Pro') === ACTIVE_COMPANY);
   if (!empleados.length) { box.innerHTML = `<span style="color:var(--gray);">${tt('Sin empleados guardados todavía.','No employees saved yet.')}</span>`; return; }
   box.innerHTML = empleados.map(e => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #222;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #222;cursor:pointer;" onclick="openEmpleadoDetail('${e.id}')">
       <div>
-        <div style="color:var(--white);">${e.nombre} ${e.w9?'📄':''}</div>
+        <div style="color:var(--white);text-decoration:underline;">${e.nombre} ${(e.w9||(e.documentos&&e.documentos.length))?'📄':''}</div>
         <div style="color:var(--gray);font-size:.65rem;">${e.telefono||''}${e.telefono&&e.email?' · ':''}${e.email||''}${e.tarifaHabitual?` · $${e.tarifaHabitual}/hr`:''}</div>
       </div>
-      <button class="del" onclick="delEmpleado('${e.id}')">✕</button>
+      <button class="del" onclick="event.stopPropagation();delEmpleado('${e.id}')">✕</button>
     </div>`).join('');
+}
+let EMD_CURRENT_ID = null;
+function openEmpleadoDetail(id) {
+  const e = S.empleados.find(x=>x.id===id);
+  if (!e) return;
+  EMD_CURRENT_ID = id;
+  document.getElementById('emp-modal-title').textContent = e.nombre;
+  document.getElementById('emd-nombre').value = e.nombre || '';
+  document.getElementById('emd-telefono').value = e.telefono || '';
+  document.getElementById('emd-email').value = e.email || '';
+  document.getElementById('emd-tarifa').value = e.tarifaHabitual || 0;
+  document.getElementById('emd-notas').value = e.notas || '';
+  renderEmpleadoDetailExtras(e);
+  document.getElementById('emp-modal').style.display = 'block';
+}
+function closeEmpleadoDetail() {
+  document.getElementById('emp-modal').style.display = 'none';
+  EMD_CURRENT_ID = null;
+  renderEmpleadoList();
+}
+function saveEmpleadoEdit() {
+  const e = S.empleados.find(x=>x.id===EMD_CURRENT_ID);
+  if (!e) return;
+  const nombre = document.getElementById('emd-nombre').value.trim();
+  if (!nombre) return alert(tt('El nombre no puede quedar vacío','Name can\'t be empty'));
+  e.nombre = nombre;
+  e.telefono = document.getElementById('emd-telefono').value.trim();
+  e.email = document.getElementById('emd-email').value.trim();
+  e.tarifaHabitual = parseFloat(document.getElementById('emd-tarifa').value) || 0;
+  e.notas = document.getElementById('emd-notas').value.trim();
+  saveData();
+  document.getElementById('emp-modal-title').textContent = e.nombre;
+  alert('✅ ' + tt('Guardado','Saved'));
+}
+function renderEmpleadoDetailExtras(e) {
+  // Total pagado histórico + historial, calculado igual que el resumen "Por Empleado" (por
+  // nombre, dentro de los proyectos de la empresa activa) para que el número siempre coincida.
+  const proyNums = proyNumsEmpresaActiva();
+  const pagosEmpleado = S.nomina.filter(n => n.empleado === e.nombre && proyNums.has(n.proy));
+  const totalPagado = pagosEmpleado.reduce((s,n)=>s+(n.total||0),0);
+  document.getElementById('emd-total-pagado').textContent = fmt(totalPagado);
+  const pagosList = document.getElementById('emd-pagos-list');
+  pagosList.innerHTML = pagosEmpleado.length ? pagosEmpleado.slice().reverse().map(n => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
+      <span>${fd(n.fecha)} — ${n.proy?`<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="closeEmpleadoDetail();openProjectDetailByNum('${n.proy}')">#${n.proy}</span>`:''} ${n.horas||''}${n.horas?'h':''}</span>
+      <span style="color:var(--green);">${fmt(n.total)}</span>
+    </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin pagos registrados aún.','No payments recorded yet.')}</span>`;
+  // Documentos: mezcla el w9 legado (si existe, como un documento más) con el arreglo nuevo
+  const docs = [];
+  if (e.w9) docs.push({ id:'legacy-w9', nombre:'W9', data:e.w9, legacy:true });
+  (e.documentos||[]).forEach(d => docs.push(d));
+  const docsList = document.getElementById('emd-docs-list');
+  docsList.innerHTML = docs.length ? docs.map(d => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
+      <span style="cursor:pointer;color:var(--blue);text-decoration:underline;" onclick="viewEmpleadoDocumento('${d.id}')">📄 ${d.nombre||'Documento'}</span>
+      <button class="del" onclick="delEmpleadoDocumento('${d.id}')">✕</button>
+    </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin documentos guardados.','No documents saved.')}</span>`;
+}
+function viewEmpleadoDocumento(docId) {
+  const e = S.empleados.find(x=>x.id===EMD_CURRENT_ID);
+  if (!e) return;
+  let data;
+  if (docId === 'legacy-w9') data = e.w9;
+  else data = (e.documentos||[]).find(d=>d.id===docId)?.data;
+  if (!data) return;
+  const w = window.open('');
+  if (data.startsWith('data:application/pdf')) {
+    w.document.write(`<iframe src="${data}" style="width:100%;height:100vh;border:none;"></iframe>`);
+  } else {
+    w.document.write(`<img src="${data}" style="max-width:100%;">`);
+  }
+}
+function delEmpleadoDocumento(docId) {
+  const e = S.empleados.find(x=>x.id===EMD_CURRENT_ID);
+  if (!e) return;
+  if (!confirm(tt('¿Eliminar este documento?','Delete this document?'))) return;
+  if (docId === 'legacy-w9') { e.w9 = ''; }
+  else { e.documentos = (e.documentos||[]).filter(d=>d.id!==docId); }
+  saveData();
+  renderEmpleadoDetailExtras(e);
+}
+function addEmpleadoDocumento() {
+  const e = S.empleados.find(x=>x.id===EMD_CURRENT_ID);
+  if (!e) return;
+  const nombreDoc = document.getElementById('emd-doc-nombre').value.trim() || 'Documento';
+  const fileInput = document.getElementById('emd-doc-file');
+  const file = fileInput.files[0];
+  if (!file) return alert(tt('Selecciona un archivo primero','Pick a file first'));
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (!e.documentos) e.documentos = [];
+    e.documentos.push({ id: gid(), nombre: nombreDoc, data: reader.result });
+    saveData();
+    document.getElementById('emd-doc-nombre').value = '';
+    fileInput.value = '';
+    renderEmpleadoDetailExtras(e);
+  };
+  reader.readAsDataURL(file);
 }
 function populateEmpleadoDatalist() {
   const dl = document.getElementById('n-emp-list');
@@ -2680,7 +2804,11 @@ function renderNomina() {
   const empData=q?list:nominaEmpresa;
   const emp={};
   empData.forEach(n=>{if(!emp[n.empleado])emp[n.empleado]=0;emp[n.empleado]+=n.total;});
-  document.getElementById('tb-emp').innerHTML=Object.entries(emp).sort((a,b)=>b[1]-a[1]).map(([e,t])=>`<tr><td>${e}</td><td style="color:var(--green)">${fmt(t)}</td></tr>`).join('');
+  document.getElementById('tb-emp').innerHTML=Object.entries(emp).sort((a,b)=>b[1]-a[1]).map(([e,t])=>{
+    const empRecord = S.empleados.find(x=>x.nombre===e && (x.empresa||'BH Pro')===ACTIVE_COMPANY);
+    const nameCell = empRecord ? `<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openEmpleadoDetail('${empRecord.id}')">${e}</span>` : e;
+    return `<tr><td>${nameCell}</td><td style="color:var(--green)">${fmt(t)}</td></tr>`;
+  }).join('');
   // Annual report
   const annEl=document.getElementById('tb-annual');
   if(annEl)annEl.innerHTML=Object.entries(emp).sort((a,b)=>b[1]-a[1]).map(([e,t])=>`<tr><td>${e}</td><td style="color:var(--green)">${fmt(t)}</td></tr>`).join('');
@@ -2926,7 +3054,7 @@ Cuando el usuario pida registrar un gasto, un pago de nómina/jornal a un emplea
 Si el usuario adjunta una imagen, primero identifica qué tipo de documento es:
 - Comprobante de pago/wire transfer/transferencia recibida: lee el monto, la fecha, el remitente/cliente, y el número de confirmación/referencia del wire si aparece en la imagen (pásalo en "numeroReferencia"). Identifica a qué proyecto corresponde (por nombre del cliente o edificio) y usa register_cobro — la foto del comprobante se guarda automáticamente junto con el registro, así que después vas a poder verla en la pestaña Cobros. Si no logras identificar con certeza el proyecto, pregunta antes de registrar nada.
 - Recibo de compra de un proveedor (ej. Home Depot, Sherwin Williams, alquiler de equipo): lee el monto, qué se compró, y la fecha. Identifica a qué proyecto corresponde si es posible (por contexto de la conversación o porque el usuario lo menciona) y usa register_gasto. Si no está claro a qué proyecto pertenece, pregunta, o si el usuario indica que es un gasto general, regístralo sin proyecto.
-- Una factura NUEVA que representa un trabajo/proyecto que hay que registrar en la app (ej. una factura en papel, un PDF fotografiado, o cualquier documento con número de factura, fecha, cliente/edificio y monto que todavía no está en el sistema): extrae TODOS estos datos exactos de la imagen — número de factura/proyecto, fecha, cliente, ubicación/edificio (ej. Acqualina, Palm Aire, o el nombre que aparezca), y el valor total. Usa el número de factura como el número de proyecto (parámetro "numero" en create_project) para que ambos coincidan siempre. Llama a create_project con esos datos. Antes de confirmar, dile al usuario en una lista corta exactamente qué leíste de la imagen (# factura, fecha, cliente, ubicación, valor) para que pueda corregirte si algo se leyó mal.
+- Una factura NUEVA que representa un trabajo/proyecto que hay que registrar en la app (ej. una factura en papel, un PDF fotografiado, o cualquier documento con número de factura, fecha, cliente/edificio y monto que todavía no está en el sistema): extrae TODOS estos datos exactos de la imagen — número de factura/proyecto, fecha, cliente, ubicación/edificio (ej. Acqualina, Palm Aire, o el nombre que aparezca), la descripción/scope of work completa de cada ítem o línea, y el valor total. Usa el número de factura como el número de proyecto (parámetro "numero" en create_project) para que ambos coincidan siempre. Llama a create_project con esos datos, Y TAMBIÉN a create_invoice con el mismo "numero", pasando cada línea/ítem tal cual aparece en la imagen en el campo "detail" (no lo resumas ni acortes la descripción) — así queda guardada la factura completa, no solo el resumen del proyecto, y el usuario puede verla después con el botón "Ver Factura" en la app. Antes de confirmar, dile al usuario en una lista corta exactamente qué leíste de la imagen (# factura, fecha, cliente, ubicación, valor, descripción del trabajo) para que pueda corregirte si algo se leyó mal.
 - Una factura que TÚ (BH Pro/Kratos) emitiste antes (ej. el usuario la foto/screenshot como referencia para hacer una nueva parecida, no para registrarla de nuevo): úsala como plantilla si el usuario pide crear una factura similar, igual que harías con el historial de texto.
 Si la imagen no es clara o no puedes determinar con confianza qué tipo de documento es o algún dato clave (número, monto, cliente), dile al usuario qué sí lograste leer y qué no, y pregunta lo que falte — nunca inventes un número de factura, cliente, o monto que no puedas leer con confianza en la imagen.
 Si el usuario adjunta un archivo Excel/CSV (verás sus filas listadas como "Fila N: columna=valor, ..."), analiza qué tipo de datos son (proyectos, facturas, gastos, nómina, pagos/cobros) según los nombres de columna y su contenido. Luego, para CADA fila que tenga datos suficientes, llama a la herramienta correspondiente (create_project, create_invoice, register_gasto, register_nomina, o register_cobro) UNA VEZ POR FILA — puedes y debes llamar herramientas muchas veces seguidas en el mismo turno para procesar todas las filas, no te detengas después de la primera. Si una fila no tiene datos suficientes o es ambigua (ej. no se puede identificar el proyecto), sáltala y menciónalo al final en tu resumen, no te detengas a preguntar por cada fila individual — solo pregunta si TODO el archivo es ambiguo sobre qué tipo de datos contiene. Al terminar, da un resumen breve: cuántas filas procesaste con éxito y cuántas tuviste que saltar y por qué.
