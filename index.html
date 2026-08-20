@@ -1168,15 +1168,35 @@ function viewInvoiceDetail(facturaId) {
         <span style="color:var(--gold);font-weight:600;">${fmt((it.qty||1)*(it.rate||0))}</span>
       </div>
     </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin ítems detallados.','No detailed items.')}</span>`;
+
+  // Payment status: look up the matching cobro for this invoice number, if one exists.
+  const cobroLigado = S.cobros.find(c => c.num === f.number && (c.empresa||'BH Pro') === (f.empresa||'BH Pro'));
+  const estadoPagoHtml = cobroLigado
+    ? `<span class="badge ${cobroLigado.estado==='Pagado'?'bp':'bpen'}">${tt(cobroLigado.estado, cobroLigado.estado==='Pagado'?'Paid':'Pending')}</span>${cobroLigado.fpago && cobroLigado.estado==='Pagado' ? ` — ${fd(cobroLigado.fpago)}` : ''}`
+    : `<span class="badge bpen">${tt('Sin registro de cobro','No collection record')}</span>`;
+
+  const envioHtml = f.sent
+    ? `<span style="color:var(--green);">✓ ${tt('Enviada','Sent')}</span> ${tt('a','to')} ${f.sentTo||'?'} ${f.sentAt ? `— ${new Date(f.sentAt).toLocaleString()}` : ''}`
+    : `<span style="color:var(--gold);">${tt('No enviada todavía','Not sent yet')}</span>`;
+
   document.getElementById('fv-body').innerHTML = `
+    <div style="margin-bottom:8px;"><b>${tt('Empresa','Company')}:</b> ${f.empresa||'BH Pro'}</div>
     <div style="margin-bottom:8px;"><b>Bill To:</b> ${f.billTo||''}</div>
-    <div style="margin-bottom:8px;"><b>${tt('Fecha','Date')}:</b> ${fd(f.date)}</div>
+    <div style="margin-bottom:8px;"><b>${tt('Fecha de factura','Invoice date')}:</b> ${fd(f.date)}</div>
+    ${f.dueDate ? `<div style="margin-bottom:8px;"><b>${tt('Fecha de vencimiento','Due date')}:</b> ${fd(f.dueDate)}</div>` : ''}
+    ${f.createdAt ? `<div style="margin-bottom:8px;"><b>${tt('Creada el','Created on')}:</b> ${new Date(f.createdAt).toLocaleString()}</div>` : ''}
     ${f.billAddress ? `<div style="margin-bottom:8px;"><b>${tt('Dirección','Address')}:</b> ${f.billAddress}</div>` : ''}
     ${f.billPhone ? `<div style="margin-bottom:8px;"><b>${tt('Teléfono','Phone')}:</b> ${f.billPhone}</div>` : ''}
+    <div style="margin-bottom:8px;"><b>${tt('Estado de envío','Send status')}:</b> ${envioHtml}</div>
+    <div style="margin-bottom:8px;"><b>${tt('Estado de pago','Payment status')}:</b> ${estadoPagoHtml}</div>
     <div style="margin:12px 0 6px;color:var(--gold);font-weight:600;">${tt('Ítems','Items')}</div>
     ${itemsHtml}
     ${f.note ? `<div style="margin-top:12px;color:var(--gray);font-size:.75rem;"><b>${tt('Nota','Note')}:</b> ${f.note}</div>` : ''}
     <div style="margin-top:14px;padding-top:10px;border-top:1px solid #2a4d80;font-size:1.05rem;font-weight:700;color:var(--gold);text-align:right;">Total: ${fmt(f.amount||0)}</div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn btn-sm" style="flex:1;" onclick="downloadInvoicePDF('${f.id}')">⬇ PDF</button>
+      <button class="btn btn-sm btn-outline" style="flex:1;" onclick="closeInvoiceView();openEmailModal('${f.id}')">✉ ${tt('Enviar','Send')}</button>
+    </div>
   `;
   document.getElementById('fv-modal').style.display = 'block';
 }
@@ -3424,6 +3444,7 @@ Cuando el usuario pida crear, actualizar, o "generar una ficha" para uno o vario
 Todas las facturas históricas, ordenadas de la MÁS RECIENTE a la más antigua (para reconocer trabajos similares/plantillas cuando el usuario diga "como el trabajo anterior" o mencione un cliente ya facturado antes — la primera que coincida con el cliente mencionado es la más reciente de ese cliente):
 ${recentInvoices || '(sin facturas aún)'}
 Cuando el usuario pida crear una factura o un proyecto por voz o texto, usa las herramientas create_invoice / create_project de inmediato, sin hacer preguntas innecesarias. Reglas para decidir con la información disponible en vez de preguntar:
+IMPORTANTE: si el usuario se refiere a una factura que YA EXISTE (menciona su número, o dice "esa factura", "la #1002", "agrégale a la que ya hice", etc.) y quiere agregar/cambiar algo (descripción, scope of work, bill to, nota, ítems), usa edit_invoice — NUNCA crees una factura nueva ni un número nuevo para esto. edit_invoice siempre te muestra primero una vista previa sin aplicar nada; muéstrasela al usuario tal cual y espera su confirmación explícita antes de volver a llamarla con confirmado:true. No asumas que el usuario ya confirmó solo porque pidió el cambio — la confirmación tiene que venir en un mensaje aparte, después de ver la vista previa.
 - Si el usuario menciona un cliente (ej. "Acqualina") y dice "lo mismo", "similar", "como el anterior", o no da más detalle: busca en la lista de "Últimas facturas" de arriba la más reciente que sea de ese mismo cliente, y úsala completa como plantilla (mismo precio, misma descripción, mismos ítems) — NO preguntes cuál factura anterior usar, asume que es la más reciente de ese cliente.
 - Aplica SOLO el cambio específico que el usuario mencione (ej. "que se hizo una línea abajo en la pared" = agrégalo como una nota/línea extra en el detalle del ítem existente, no como pregunta).
 - El nombre del proyecto puede ser el mismo que el de la factura plantilla si el usuario no da uno distinto.
