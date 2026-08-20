@@ -582,6 +582,41 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       saveToDisk();
       return { resultMsg: `Factura #${numero} actualizada:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
     }
+    if (toolName === 'edit_project') {
+      const { numero, nombre, cliente, valor, loc, estado, notas, inicio, fin, confirmado } = input;
+      if (!numero) return { resultMsg: 'Error: falta el número de proyecto a editar.', changed: false };
+      const proj = D.proyectos.find(p => p.num === String(numero) && (p.empresa||'BH Pro') === emp);
+      if (!proj) return { resultMsg: `Error: no encontré ningún proyecto #${numero} en ${emp}.`, changed: false };
+      // Build a preview of what WOULD change without touching anything yet.
+      const cambios = [];
+      if (nombre !== undefined && nombre !== proj.nombre) cambios.push(`Nombre: "${proj.nombre||''}" → "${nombre}"`);
+      if (cliente !== undefined && cliente !== proj.cliente) cambios.push(`Cliente: "${proj.cliente||''}" → "${cliente}"`);
+      if (valor !== undefined && Math.abs((proj.valor||0) - valor) > 0.01) cambios.push(`Valor: $${(proj.valor||0).toFixed(2)} → $${valor.toFixed(2)}`);
+      if (loc !== undefined && loc !== proj.loc) cambios.push(`Locación: "${proj.loc||''}" → "${loc}"`);
+      if (estado !== undefined && estado !== proj.estado) cambios.push(`Estado: "${proj.estado||''}" → "${estado}"`);
+      if (notas !== undefined && notas !== proj.notas) cambios.push(`Notas: "${proj.notas||'(vacía)'}" → "${notas}"`);
+      if (inicio !== undefined && inicio !== proj.inicio) cambios.push(`Fecha de inicio: "${proj.inicio||'(vacía)'}" → "${inicio}"`);
+      if (fin !== undefined && fin !== proj.fin) cambios.push(`Fecha de fin: "${proj.fin||'(vacía)'}" → "${fin}"`);
+      if (!cambios.length) return { resultMsg: `No hay ningún cambio real que aplicar al proyecto #${numero} — los valores que diste son iguales a los que ya tiene.`, changed: false };
+      // SAFETY GATE: same hard requirement as edit_invoice — without confirmado === true, this
+      // NEVER writes anything, regardless of what the model intended.
+      if (confirmado !== true) {
+        return {
+          resultMsg: `Esto es lo que cambiaría en el proyecto #${numero} (todavía NO se ha aplicado nada):\n` + cambios.map(c=>'- '+c).join('\n') + `\n\nPregúntale al usuario si confirma, y solo si dice que sí, vuelve a llamar a edit_project con los mismos datos y "confirmado": true.`,
+          changed: false
+        };
+      }
+      if (nombre !== undefined) proj.nombre = nombre;
+      if (cliente !== undefined) proj.cliente = cliente;
+      if (valor !== undefined) proj.valor = valor;
+      if (loc !== undefined) proj.loc = loc;
+      if (estado !== undefined) proj.estado = estado;
+      if (notas !== undefined) proj.notas = notas;
+      if (inicio !== undefined) proj.inicio = inicio;
+      if (fin !== undefined) proj.fin = fin;
+      saveToDisk();
+      return { resultMsg: `Proyecto #${numero} actualizado:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
+    }
     if (toolName === 'create_project') {
       const { nombre, cliente, valor, loc, estado, numero, confirmarDuplicado } = input;
       if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
@@ -871,6 +906,26 @@ app.post('/api/claude', auth, async (q, r) => {
                 required: ['desc', 'qty', 'rate']
               }
             },
+            confirmado: { type: 'boolean', description: 'Déjalo sin pasar (o false) para solo ver la vista previa del cambio. Pásalo como true SOLO después de que el usuario confirmó explícitamente que sí quiere aplicar el cambio mostrado.' }
+          },
+          required: ['numero']
+        }
+      },
+      {
+        name: 'edit_project',
+        description: 'Modifica un proyecto YA EXISTENTE (nombre, cliente, valor, locación, estado, notas, fecha de inicio o fecha de fin). Úsala cuando el usuario pida cambiar cualquier dato de un proyecto que ya tiene número — NUNCA crees un proyecto nuevo para esto. IMPORTANTE — mismo flujo obligatorio en dos pasos que edit_invoice: (1) Primero llama a esta herramienta SIN "confirmado" (o con confirmado:false) — esto NO aplica nada, solo devuelve una vista previa. Muéstrasela al usuario y pregúntale si confirma. (2) Solo si confirma en su siguiente mensaje, vuelve a llamarla con los mismos datos y "confirmado": true para aplicar de verdad. Nunca pases confirmado:true en el primer intento.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            numero: { type: 'string', description: 'Número del proyecto existente a editar' },
+            nombre: { type: 'string', description: 'Nuevo nombre del proyecto, solo si el usuario pide cambiarlo' },
+            cliente: { type: 'string', description: 'Nuevo cliente, solo si el usuario pide cambiarlo' },
+            valor: { type: 'number', description: 'Nuevo valor cotizado, solo si el usuario pide cambiarlo' },
+            loc: { type: 'string', description: 'Nueva locación/edificio, solo si el usuario pide cambiarla' },
+            estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Nuevo estado, solo si el usuario pide cambiarlo' },
+            notas: { type: 'string', description: 'Nuevas notas/descripción, solo si el usuario pide cambiarlas' },
+            inicio: { type: 'string', description: 'Nueva fecha de inicio en formato YYYY-MM-DD, solo si el usuario pide cambiarla' },
+            fin: { type: 'string', description: 'Nueva fecha de fin en formato YYYY-MM-DD, solo si el usuario pide cambiarla' },
             confirmado: { type: 'boolean', description: 'Déjalo sin pasar (o false) para solo ver la vista previa del cambio. Pásalo como true SOLO después de que el usuario confirmó explícitamente que sí quiere aplicar el cambio mostrado.' }
           },
           required: ['numero']
