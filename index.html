@@ -258,6 +258,12 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadCobrosDuplicados()" data-i18n="btn.buscar_duplicados">🔍 Buscar Duplicados</button>
     <div id="cobros-dup-result" style="font-size:.75rem;"></div>
   </div>
+  <div class="card admin-only" style="display:none;border:1px solid #FF6B6B33;">
+    <div class="card-title">🔗 Registros Huérfanos (Proyectos vs Cobros/Gastos/Nómina)</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Cobros, gastos, nómina o facturas que apuntan a un # de proyecto que ya no existe (ej. porque se borró el proyecto sin borrar lo ligado). Esto es lo que hace que Proyectos y Cobros no coincidan.</p>
+    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadRegistrosHuerfanos()">🔍 Buscar Huérfanos</button>
+    <div id="huerfanos-result" style="font-size:.75rem;"></div>
+  </div>
   <div class="card admin-only" style="display:none;border:1px solid #E74C3C33;">
     <div class="card-title" data-i18n="ct.debug_asistente">🐛 Diagnóstico del Asistente IA</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.debug_desc">Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.</p>
@@ -1178,8 +1184,8 @@ function viewInvoiceDetail(facturaId) {
     : `<span class="badge bpen">${tt('Sin registro de cobro','No collection record')}</span>`;
 
   const envioHtml = f.sent
-    ? `<span style="color:var(--green);">✓ ${tt('Enviada','Sent')}</span> ${tt('a','to')} ${f.sentTo||'?'} ${f.sentAt ? `— ${new Date(f.sentAt).toLocaleString()}` : ''}`
-    : `<span style="color:var(--gold);">${tt('No enviada todavía','Not sent yet')}</span>`;
+    ? `<span style="color:var(--green);">✓ ${tt('Enviada','Sent')}</span> ${f.sentTo ? (tt('a','to') + ' ' + f.sentTo) : ''} ${f.sentAt ? `— ${new Date(f.sentAt).toLocaleString()}` : ''} <button class="btn btn-sm btn-outline" style="margin-left:6px;font-size:.6rem;padding:2px 6px;" onclick="toggleFacturaEnviada('${f.id}')">↺ ${tt('Marcar No Enviada','Mark Not Sent')}</button>`
+    : `<span style="color:var(--gold);">${tt('No enviada todavía','Not sent yet')}</span> <button class="btn btn-sm" style="margin-left:6px;font-size:.6rem;padding:2px 6px;" onclick="toggleFacturaEnviada('${f.id}')">✓ ${tt('Marcar como Enviada','Mark as Sent')}</button>`;
 
   document.getElementById('fv-body').innerHTML = `
     <div style="margin-bottom:8px;"><b>${tt('Empresa','Company')}:</b> ${f.empresa||'BH Pro'}</div>
@@ -1214,6 +1220,25 @@ function viewInvoiceDetail(facturaId) {
     </div>
   `;
   document.getElementById('fv-modal').style.display = 'block';
+}
+// Lets Brandon mark an invoice as sent/not-sent by hand — since he sometimes sends invoices
+// through his own email/WhatsApp/etc. outside this app, there's no automatic way for the app to
+// know that happened. This gives him direct control regardless of how it was actually sent.
+function toggleFacturaEnviada(facturaId) {
+  const inv = S.facturas.find(f => f.id === facturaId);
+  if (!inv) return;
+  if (inv.sent) {
+    inv.sent = false;
+    inv.sentTo = '';
+    inv.sentAt = '';
+  } else {
+    inv.sent = true;
+    inv.sentAt = new Date().toISOString();
+    if (!inv.sentTo) inv.sentTo = inv.billTo || '';
+  }
+  saveData();
+  viewInvoiceDetail(facturaId);
+  renderAll();
 }
 function closeInvoiceView() {
   document.getElementById('fv-modal').style.display = 'none';
@@ -1417,7 +1442,36 @@ function autofillLocFromCliente(nombreCliente, targetFieldId) {
   const proyectoPrevio = S.proyectos.find(p => (p.empresa||'BH Pro') === ACTIVE_COMPANY && p.cliente && p.cliente.trim().toLowerCase() === nombreNorm && p.loc);
   if (proyectoPrevio) targetField.value = proyectoPrevio.loc;
 }
-async function delP(id){if(!confirm('¿Eliminar?'))return;S.proyectos=S.proyectos.filter(p=>p.id!==id);await deleteServerItem('proyectos', id);saveData();renderAll();}
+async function delP(id){
+  const p = S.proyectos.find(x=>x.id===id);
+  if (!p) return;
+  const empresaP = p.empresa || 'BH Pro';
+  // A project's number is shared across cobros/gastos/nomina/facturas — deleting the project
+  // alone (like this used to do) leaves those records "orphaned", pointing at a project number
+  // that no longer exists. That's exactly what breaks Projects vs Collections not matching up.
+  // So deleting a project now also deletes everything genuinely tied to it, after telling the
+  // user exactly what's about to go.
+  const relCobros = S.cobros.filter(c=>c.num===p.num && (c.empresa||'BH Pro')===empresaP);
+  const relGastos = S.gastos.filter(g=>g.proy===p.num && (g.empresa||'BH Pro')===empresaP);
+  const relNomina = S.nomina.filter(n=>n.proy===p.num && (n.empresa||'BH Pro')===empresaP);
+  const relFacturas = S.facturas.filter(f=>f.number===p.num && (f.empresa||'BH Pro')===empresaP);
+  const totalRel = relCobros.length + relGastos.length + relNomina.length + relFacturas.length;
+  let mensaje = tt('¿Eliminar este proyecto?','Delete this project?');
+  if (totalRel > 0) {
+    mensaje += '\n\n' + tt(
+      `También se eliminarán ${totalRel} registro(s) ligados a este proyecto: ${relCobros.length} cobro(s), ${relGastos.length} gasto(s), ${relNomina.length} pago(s) de nómina, ${relFacturas.length} factura(s). Esto no se puede deshacer.`,
+      `This will also delete ${totalRel} record(s) linked to this project: ${relCobros.length} collection(s), ${relGastos.length} expense(s), ${relNomina.length} payroll payment(s), ${relFacturas.length} invoice(s). This can't be undone.`
+    );
+  }
+  if(!confirm(mensaje))return;
+  S.proyectos=S.proyectos.filter(x=>x.id!==id);
+  await deleteServerItem('proyectos', id);
+  for (const c of relCobros) { S.cobros = S.cobros.filter(x=>x.id!==c.id); await deleteServerItem('cobros', c.id); }
+  for (const g of relGastos) { S.gastos = S.gastos.filter(x=>x.id!==g.id); await deleteServerItem('gastos', g.id); }
+  for (const n of relNomina) { S.nomina = S.nomina.filter(x=>x.id!==n.id); await deleteServerItem('nomina', n.id); }
+  for (const f of relFacturas) { S.facturas = S.facturas.filter(x=>x.id!==f.id); await deleteServerItem('facturas', f.id); }
+  saveData();renderAll();
+}
 function toggleProyectoCerrado(id){
   const p = S.proyectos.find(x=>x.id===id);
   if (!p) return;
@@ -2326,6 +2380,51 @@ async function loadBackupsList() {
   }
 }
 
+async function loadRegistrosHuerfanos() {
+  const box = document.getElementById('huerfanos-result');
+  box.textContent = tt('Buscando...','Searching...');
+  try {
+    const res = await fetch('/api/registros/huerfanos', {credentials:'same-origin'});
+    const raw = await res.text();
+    let d;
+    try { d = JSON.parse(raw); }
+    catch(e) { box.textContent = tt('Respuesta inesperada del servidor: ','Unexpected server response: ') + raw.slice(0,300); return; }
+    if (!res.ok) { box.textContent = tt('Error: ','Error: ') + (d.error||''); return; }
+    if (!d.total) {
+      box.innerHTML = `<span style="color:var(--green);">✅ ${tt('No hay registros huérfanos — todo coincide correctamente.','No orphaned records — everything matches up correctly.')}</span>`;
+      return;
+    }
+    const secciones = [
+      { key:'cobros', tabla:'cobros', label: tt('Cobros','Collections'), fmtLine: c => `#${c.num} (${c.empresa}) — ${c.cliente||'?'} — ${fmt(c.monto)} — ${c.estado}` },
+      { key:'gastos', tabla:'gastos', label: tt('Gastos','Expenses'), fmtLine: g => `#${g.proy} (${g.empresa}) — ${g.desc||'?'} — ${fmt(g.monto)}` },
+      { key:'nomina', tabla:'nomina', label: tt('Nómina','Payroll'), fmtLine: n => `#${n.proy} (${n.empresa}) — ${n.empleado} — ${fmt(n.total)}` },
+      { key:'facturas', tabla:'facturas', label: tt('Facturas','Invoices'), fmtLine: f => `#${f.number} (${f.empresa}) — ${f.billTo||'?'} — ${fmt(f.amount)}` }
+    ];
+    let html = `<div style="color:var(--gold);margin-bottom:8px;">⚠️ ${d.total} ${tt('registro(s) huérfano(s) encontrado(s)','orphaned record(s) found')}:</div>`;
+    secciones.forEach(sec => {
+      const items = d[sec.key];
+      if (!items || !items.length) return;
+      html += `<div style="margin-bottom:10px;"><div style="color:var(--white);font-weight:600;font-size:.7rem;margin-bottom:4px;">${sec.label} (${items.length})</div>`;
+      html += items.map(item => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;font-size:.68rem;color:var(--gray);">
+          <span>${sec.fmtLine(item)}</span>
+          <button class="del" onclick="borrarRegistroHuerfano('${sec.tabla}','${item.id}')">✕</button>
+        </div>`).join('');
+      html += `</div>`;
+    });
+    box.innerHTML = html;
+  } catch(e) {
+    box.textContent = tt('Error de red: ','Network error: ') + e.message;
+  }
+}
+async function borrarRegistroHuerfano(tabla, id) {
+  if (!confirm(tt('¿Eliminar este registro huérfano?','Delete this orphaned record?'))) return;
+  S[tabla] = S[tabla].filter(x => x.id !== id);
+  await deleteServerItem(tabla, id);
+  await loadData();
+  renderAll();
+  loadRegistrosHuerfanos();
+}
 async function loadCobrosDuplicados() {
   const box = document.getElementById('cobros-dup-result');
   box.textContent = tt('Buscando...','Searching...');
