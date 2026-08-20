@@ -264,6 +264,12 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadRegistrosHuerfanos()">🔍 Buscar Huérfanos</button>
     <div id="huerfanos-result" style="font-size:.75rem;"></div>
   </div>
+  <div class="card admin-only" style="display:none;border:2px solid var(--gold);">
+    <div class="card-title" style="font-size:1rem;">🔧 Arreglar Todo (Proyectos ↔ Cobros ↔ Ubicaciones)</div>
+    <p style="font-size:.7rem;color:var(--gray);margin-bottom:10px;">Un solo botón que: (1) crea el cobro Pendiente de cualquier proyecto que no lo tenga, y (2) unifica las ubicaciones repetidas del mismo cliente en una sola. Tócalo cada vez que algo no coincida entre Proyectos, Collections o Locations.</p>
+    <button class="btn" style="width:100%;font-size:.85rem;padding:12px;" onclick="arreglarTodoAhora()">🔧 Arreglar Todo Ahora</button>
+    <div id="arreglar-todo-result" style="font-size:.75rem;margin-top:8px;"></div>
+  </div>
   <div class="card admin-only" style="display:none;border:1px solid #2ECC8A33;">
     <div class="card-title">🔄 Proyectos sin Cobro (Sincronizar con Collections)</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Todo proyecto debería tener su cobro correspondiente en Collections desde que se crea. Si tienes proyectos viejos que se crearon antes de este arreglo y no aparecen ahí, aquí puedes crearles el cobro Pendiente de un solo toque.</p>
@@ -291,7 +297,11 @@ select option{background:var(--black-3);}
   <div class="card">
     <div class="card-title" data-i18n="ct.agregar_proyecto">Agregar Proyecto</div>
     <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><input type="text" id="p-num" placeholder="1070"></div><div><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="p-cli" list="p-cli-list" placeholder="Acqualina Management LLC" onfocus="populateClienteDatalist('p-cli-list')" onchange="autofillLocFromCliente(this.value,'p-loc')"><datalist id="p-cli-list"></datalist></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div><input type="text" id="p-loc" list="loc-list" placeholder="Acqualina" onfocus="populateLocDatalist('loc-list')"><datalist id="loc-list"><option value="Acqualina"><option value="Palm Aire"></datalist></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.nombre_del_proyecto">Nombre del Proyecto</div><input type="text" id="p-nom" placeholder="Exterior wall painting"></div><div><div class="fl" data-i18n="fld.locacion">Locación</div>
+      <select id="p-loc-select" onchange="onLocSelectChange('p-loc-select','p-loc-nueva','p-loc')" onfocus="populateLocSelect('p-loc-select')" style="width:100%;margin-bottom:6px;"></select>
+      <input type="text" id="p-loc-nueva" placeholder="Escribe la ubicación nueva..." style="display:none;" oninput="document.getElementById('p-loc').value=this.value">
+    </div></div>
+    <input type="hidden" id="p-loc">
     <div class="fg" id="p-pedro-row"><div id="p-pedro-wrap" style="display:none;">
       <div class="fl" data-i18n="fld.tipo_comision_pedro">Tipo de Comisión Pedro</div>
       <select id="p-pedro-tipo" onchange="togglePedroInputType('p')" style="margin-bottom:6px;">
@@ -380,7 +390,11 @@ select option{background:var(--black-3);}
       <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.cliente">Cliente</div><input type="text" id="pd-e-cliente" list="pd-e-cliente-list" onfocus="populateClienteDatalist('pd-e-cliente-list')" onchange="autofillLocFromCliente(this.value,'pd-e-loc')"><datalist id="pd-e-cliente-list"></datalist></div>
       <div class="fg"><div><div class="fl" data-i18n="fld.valor_cotizado">Valor Cotizado $</div><input type="number" id="pd-e-valor" min="0" step="0.01"></div><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="pd-e-estado"><option value="Activo" data-i18n="opt.activo">Activo</option><option value="Completado" data-i18n="opt.completado">Completado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div></div>
       <div class="fg"><div><div class="fl" data-i18n="fld.fecha_inicio">Fecha Inicio</div><input type="date" id="pd-e-inicio"></div><div><div class="fl" data-i18n="fld.fecha_fin">Fecha Fin</div><input type="date" id="pd-e-fin"></div></div>
-      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.ubicacion">Ubicación</div><input type="text" id="pd-e-loc"></div>
+      <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.ubicacion">Ubicación</div>
+        <select id="pd-e-loc-select" onchange="onLocSelectChange('pd-e-loc-select','pd-e-loc-nueva','pd-e-loc')" onfocus="populateLocSelect('pd-e-loc-select')" style="width:100%;margin-bottom:6px;"></select>
+        <input type="text" id="pd-e-loc-nueva" placeholder="Escribe la ubicación nueva..." style="display:none;" oninput="document.getElementById('pd-e-loc').value=this.value">
+      </div>
+      <input type="hidden" id="pd-e-loc">
       <div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="fl" data-i18n="fld.notas">Notas</div><button type="button" class="btn btn-sm btn-outline" style="font-size:.6rem;padding:3px 8px;" onclick="openNotasExpandModal()"><span data-i18n="btn.ver_expandir">👁 Ver/Expandir</span></button></div><input type="text" id="pd-e-notas"></div>
       <div id="pd-e-pedro-wrap" style="display:none;margin-bottom:10px;">
         <div class="fl" data-i18n="fld.tipo_comision_pedro">Tipo de Comisión Pedro</div>
@@ -992,7 +1006,19 @@ function mergeArrayById(serverArr, localArr) {
   return Array.from(merged.values());
 }
 
-async function saveData() {
+// CRITICAL FIX: if the user adds several items quickly (gastos, cobros, etc.), each call to
+// saveData() used to fire its OWN independent "read server → merge → write server" cycle at the
+// same time as the others. Since those cycles overlap, a later call could read the server BEFORE
+// an earlier call finished writing, then write back a snapshot that's missing the earlier item —
+// or, if a button got tapped twice quickly, the exact same item could get pushed twice with two
+// different ids, looking like a random duplicate. Chaining every call through this queue forces
+// them to run strictly one at a time, in order, so no save can ever step on another mid-flight.
+let SAVE_DATA_QUEUE = Promise.resolve();
+function saveData() {
+  SAVE_DATA_QUEUE = SAVE_DATA_QUEUE.then(() => saveDataInner()).catch(() => {});
+  return SAVE_DATA_QUEUE;
+}
+async function saveDataInner() {
   try {
     const res = await fetch('/api/data');
     let serverData = {};
@@ -1069,7 +1095,7 @@ function togglePdEdit() {
     document.getElementById('pd-e-estado').value = p.estado || 'Activo';
     document.getElementById('pd-e-inicio').value = p.inicio || '';
     document.getElementById('pd-e-fin').value = p.fin || '';
-    document.getElementById('pd-e-loc').value = p.loc || '';
+    setLocValue('pd-e-loc-select','pd-e-loc-nueva','pd-e-loc', p.loc || '');
     document.getElementById('pd-e-notas').value = p.notas || '';
     const pedroWrap = document.getElementById('pd-e-pedro-wrap');
     if ((p.empresa||'BH Pro') === 'Kratos') {
@@ -1256,20 +1282,27 @@ function pdCalcNominaTotal() {
   document.getElementById('pd-n-total').value = (horas*tarifa) || '';
 }
 
+let ADD_GASTO_PROJECT_EN_CURSO = false;
 async function addGastoToProject() {
+  if (ADD_GASTO_PROJECT_EN_CURSO) return;
   if (!PD_CURRENT_NUM) return;
   const mon = parseFloat(document.getElementById('pd-g-monto').value)||0;
   if (!mon) return alert('Ingresa el monto');
-  const fotoInput = document.getElementById('pd-g-foto');
-  let foto = '';
-  if (fotoInput && fotoInput.files && fotoInput.files[0]) {
-    try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
+  ADD_GASTO_PROJECT_EN_CURSO = true;
+  try {
+    const fotoInput = document.getElementById('pd-g-foto');
+    let foto = '';
+    if (fotoInput && fotoInput.files && fotoInput.files[0]) {
+      try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
+    }
+    S.gastos.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, cat:document.getElementById('pd-g-cat').value, monto:mon, desc:document.getElementById('pd-g-desc').value.trim(), recibo:'', foto, empresa: ACTIVE_COMPANY });
+    await saveData();
+    ['pd-g-monto','pd-g-desc'].forEach(id=>document.getElementById(id).value='');
+    if (fotoInput) fotoInput.value='';
+    renderProjectDetail();
+  } finally {
+    ADD_GASTO_PROJECT_EN_CURSO = false;
   }
-  S.gastos.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, cat:document.getElementById('pd-g-cat').value, monto:mon, desc:document.getElementById('pd-g-desc').value.trim(), recibo:'', foto, empresa: ACTIVE_COMPANY });
-  saveData();
-  ['pd-g-monto','pd-g-desc'].forEach(id=>document.getElementById(id).value='');
-  if (fotoInput) fotoInput.value='';
-  renderProjectDetail();
 }
 async function delGastoFromProject(id){ S.gastos=S.gastos.filter(g=>g.id!==id); await deleteServerItem('gastos', id); saveData(); renderProjectDetail(); }
 
@@ -1431,7 +1464,7 @@ function addProyecto() {
   if (!cobroYaExiste && valorVal > 0) {
     S.cobros.push({ id:gid(), num, cliente:clienteVal, monto:valorVal, fecha: inicioVal || new Date().toISOString().slice(0,10), estado:'Pendiente', tipo:'', cheque:'', fpago:'', empresa });
   }
-  saveData(); ['p-num','p-nom','p-val','p-ini','p-fin','p-not','p-loc','p-pedro'].forEach(id=>document.getElementById(id).value=''); renderAll();
+  saveData(); ['p-num','p-nom','p-val','p-ini','p-fin','p-not','p-loc','p-pedro'].forEach(id=>document.getElementById(id).value=''); setLocValue('p-loc-select','p-loc-nueva','p-loc',''); renderAll();
 }
 // Auto-registers a client name into S.clientes the moment it's used anywhere (project, invoice,
 // collection) if it's not already there — so it shows up as a suggestion everywhere else from
@@ -1457,10 +1490,19 @@ function autofillLocFromCliente(nombreCliente, targetFieldId) {
   const targetField = document.getElementById(targetFieldId);
   if (!targetField || targetField.value.trim()) return; // ya tiene algo escrito, no lo tocamos
   const nombreNorm = nombreCliente.trim().toLowerCase();
+  const selectId = targetFieldId + '-select';
+  const textFieldId = targetFieldId + '-nueva';
   const clienteGuardado = (S.clientes||[]).find(c => (c.empresa||'BH Pro') === ACTIVE_COMPANY && c.nombre.trim().toLowerCase() === nombreNorm && c.ubicacion);
-  if (clienteGuardado) { targetField.value = clienteGuardado.ubicacion; return; }
+  if (clienteGuardado) {
+    if (document.getElementById(selectId)) setLocValue(selectId, textFieldId, targetFieldId, clienteGuardado.ubicacion);
+    else targetField.value = clienteGuardado.ubicacion;
+    return;
+  }
   const proyectoPrevio = S.proyectos.find(p => (p.empresa||'BH Pro') === ACTIVE_COMPANY && p.cliente && p.cliente.trim().toLowerCase() === nombreNorm && p.loc);
-  if (proyectoPrevio) targetField.value = proyectoPrevio.loc;
+  if (proyectoPrevio) {
+    if (document.getElementById(selectId)) setLocValue(selectId, textFieldId, targetFieldId, proyectoPrevio.loc);
+    else targetField.value = proyectoPrevio.loc;
+  }
 }
 async function delP(id){
   const p = S.proyectos.find(x=>x.id===id);
@@ -1544,21 +1586,29 @@ function fileToCompressedBase64(file, maxW) {
   });
 }
 
+let ADD_GASTO_EN_CURSO = false;
 async function addGasto() {
+  if (ADD_GASTO_EN_CURSO) return; // evita que un doble-toque mientras se procesa la foto cree dos gastos idénticos
   const mon = parseFloat(document.getElementById('g-mon').value)||0;
   if (!mon) return alert('Ingresa el monto');
-  const fotoInput = document.getElementById('g-foto');
-  let foto = '';
-  if (fotoInput && fotoInput.files && fotoInput.files[0]) {
-    try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) { console.log('Foto error:', e); }
+  ADD_GASTO_EN_CURSO = true;
+  try {
+    const fotoInput = document.getElementById('g-foto');
+    let foto = '';
+    if (fotoInput && fotoInput.files && fotoInput.files[0]) {
+      try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) { console.log('Foto error:', e); }
+    }
+    let proyVal = document.getElementById('g-pro').value.trim();
+    if (proyVal === 'GENERAL') proyVal = '';
+    S.gastos.push({ id:gid(), fecha:document.getElementById('g-fec').value, proy:proyVal, cat:document.getElementById('g-cat').value, monto:mon, desc:document.getElementById('g-des').value.trim(), recibo:document.getElementById('g-rec').value.trim(), foto, empresa: ACTIVE_COMPANY });
+    await saveData();
+    ['g-fec','g-pro','g-mon','g-des','g-rec'].forEach(id=>document.getElementById(id).value='');
+    if (fotoInput) fotoInput.value='';
+    document.getElementById('g-foto-preview').innerHTML='';
+    renderAll();
+  } finally {
+    ADD_GASTO_EN_CURSO = false;
   }
-  let proyVal = document.getElementById('g-pro').value.trim();
-  if (proyVal === 'GENERAL') proyVal = '';
-  S.gastos.push({ id:gid(), fecha:document.getElementById('g-fec').value, proy:proyVal, cat:document.getElementById('g-cat').value, monto:mon, desc:document.getElementById('g-des').value.trim(), recibo:document.getElementById('g-rec').value.trim(), foto, empresa: ACTIVE_COMPANY });
-  saveData(); ['g-fec','g-pro','g-mon','g-des','g-rec'].forEach(id=>document.getElementById(id).value='');
-  if (fotoInput) fotoInput.value='';
-  document.getElementById('g-foto-preview').innerHTML='';
-  renderAll();
 }
 async function delG(id){S.gastos=S.gastos.filter(g=>g.id!==id);await deleteServerItem('gastos', id);saveData();renderAll();}
 // Opens a photo/document in a new tab with an actual visible "Close" button — window.open()
@@ -1890,6 +1940,61 @@ function populateLocDatalist(listId) {
   (S.clientes||[]).filter(c=>(c.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(c=>{ if(c.ubicacion) locs.add(c.ubicacion.trim()); });
   const sorted = Array.from(locs).filter(Boolean).sort((a,b)=>a.localeCompare(b));
   dl.innerHTML = sorted.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+// Real dropdown version of the same idea — Brandon explicitly asked for a clickable list of
+// existing locations (tied 1:1 to clients) instead of a free-text field that can drift into
+// near-duplicate strings for the same real building.
+function todasLasUbicacionesConocidas() {
+  const locs = new Set();
+  S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(p=>{ if(p.loc) locs.add(p.loc.trim()); });
+  (S.clientes||[]).filter(c=>(c.empresa||'BH Pro')===ACTIVE_COMPANY).forEach(c=>{ if(c.ubicacion) locs.add(c.ubicacion.trim()); });
+  return Array.from(locs).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+}
+function populateLocSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const current = sel.value;
+  const opciones = todasLasUbicacionesConocidas();
+  sel.innerHTML = `<option value="">${tt('-- Selecciona una ubicación --','-- Select a location --')}</option>`
+    + `<option value="__nueva__">➕ ${tt('Nueva ubicación...','New location...')}</option>`
+    + opciones.map(o => `<option value="${o.replace(/"/g,'&quot;')}">${o}</option>`).join('');
+  if (current) sel.value = current;
+}
+function onLocSelectChange(selectId, textFieldId, hiddenFieldId) {
+  const sel = document.getElementById(selectId);
+  const textField = document.getElementById(textFieldId);
+  const hidden = document.getElementById(hiddenFieldId);
+  if (!sel || !textField || !hidden) return;
+  if (sel.value === '__nueva__') {
+    textField.style.display = 'block';
+    textField.value = '';
+    hidden.value = '';
+    textField.focus();
+  } else {
+    textField.style.display = 'none';
+    hidden.value = sel.value;
+  }
+}
+// Programmatically sets the select+hidden+text-field trio to a given location value (used when
+// opening the edit form, or when auto-filling from a chosen client) — so the dropdown always
+// visually reflects what's actually stored, not just the hidden field.
+function setLocValue(selectId, textFieldId, hiddenFieldId, value) {
+  populateLocSelect(selectId);
+  const sel = document.getElementById(selectId);
+  const textField = document.getElementById(textFieldId);
+  const hidden = document.getElementById(hiddenFieldId);
+  if (!sel || !textField || !hidden) return;
+  hidden.value = value || '';
+  if (!value) { sel.value = ''; textField.style.display = 'none'; return; }
+  const opciones = todasLasUbicacionesConocidas();
+  if (opciones.includes(value)) {
+    sel.value = value;
+    textField.style.display = 'none';
+  } else {
+    sel.value = '__nueva__';
+    textField.style.display = 'block';
+    textField.value = value;
+  }
 }
 function populateClienteDatalist(listId) {
   const dl = document.getElementById(listId);
@@ -2400,6 +2505,23 @@ async function loadBackupsList() {
   }
 }
 
+async function arreglarTodoAhora() {
+  const box = document.getElementById('arreglar-todo-result');
+  box.textContent = tt('Arreglando todo, un momento...','Fixing everything, one moment...');
+  try {
+    const res = await fetch('/api/proyectos/arreglar-todo', {method:'POST', credentials:'same-origin'});
+    const raw = await res.text();
+    let d;
+    try { d = JSON.parse(raw); }
+    catch(e) { box.textContent = tt('Respuesta inesperada del servidor: ','Unexpected server response: ') + raw.slice(0,300); return; }
+    if (!res.ok) { box.textContent = tt('Error: ','Error: ') + (d.error||''); return; }
+    box.innerHTML = `<span style="color:var(--green);">✅ ${d.cobrosCreados} ${tt('cobro(s) creado(s)','collection(s) created')} · ${d.locacionesActualizadas} ${tt('ubicación(es) unificada(s)','location(s) unified')}</span>`;
+    await loadData();
+    renderAll();
+  } catch(e) {
+    box.textContent = tt('Error de red: ','Network error: ') + e.message;
+  }
+}
 async function loadProyectosSinCobro() {
   const box = document.getElementById('sin-cobro-result');
   box.textContent = tt('Buscando...','Searching...');
