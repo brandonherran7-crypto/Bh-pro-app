@@ -264,6 +264,12 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadRegistrosHuerfanos()">🔍 Buscar Huérfanos</button>
     <div id="huerfanos-result" style="font-size:.75rem;"></div>
   </div>
+  <div class="card admin-only" style="display:none;border:1px solid #2ECC8A33;">
+    <div class="card-title">🔄 Proyectos sin Cobro (Sincronizar con Collections)</div>
+    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Todo proyecto debería tener su cobro correspondiente en Collections desde que se crea. Si tienes proyectos viejos que se crearon antes de este arreglo y no aparecen ahí, aquí puedes crearles el cobro Pendiente de un solo toque.</p>
+    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadProyectosSinCobro()">🔍 Buscar Proyectos sin Cobro</button>
+    <div id="sin-cobro-result" style="font-size:.75rem;"></div>
+  </div>
   <div class="card admin-only" style="display:none;border:1px solid #E74C3C33;">
     <div class="card-title" data-i18n="ct.debug_asistente">🐛 Diagnóstico del Asistente IA</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.debug_desc">Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.</p>
@@ -1408,9 +1414,23 @@ function addProyecto() {
   const empresa = ACTIVE_COMPANY;
   const pedroTipo = document.getElementById('p-pedro-tipo') ? document.getElementById('p-pedro-tipo').value : 'porcentaje';
   const clienteVal = document.getElementById('p-cli').value.trim();
-  const locVal = document.getElementById('p-loc').value.trim();
-  S.proyectos.push({ id:gid(), num, nombre:nom, cliente:clienteVal, valor:parseFloat(document.getElementById('p-val').value)||0, inicio:document.getElementById('p-ini').value, fin:document.getElementById('p-fin').value, estado:document.getElementById('p-est').value, notas:document.getElementById('p-not').value.trim(), loc:locVal, empresa, pedroTipo, pedroPct: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro').value)||0) : 0, pedroValor: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro-fijo').value)||0) : 0 });
+  let locVal = document.getElementById('p-loc').value.trim();
+  const valorVal = parseFloat(document.getElementById('p-val').value)||0;
+  // CONSISTENCY FIX: if this client already has a saved canonical location, always use that one
+  // instead of whatever was typed here — so the same building never ends up saved under two
+  // slightly different address strings.
+  const clienteExistente = (S.clientes||[]).find(c => (c.empresa||'BH Pro')===empresa && c.nombre.trim().toLowerCase()===clienteVal.trim().toLowerCase());
+  if (clienteExistente && clienteExistente.ubicacion) locVal = clienteExistente.ubicacion;
+  const inicioVal = document.getElementById('p-ini').value;
+  S.proyectos.push({ id:gid(), num, nombre:nom, cliente:clienteVal, valor:valorVal, inicio:inicioVal, fin:document.getElementById('p-fin').value, estado:document.getElementById('p-est').value, notas:document.getElementById('p-not').value.trim(), loc:locVal, empresa, pedroTipo, pedroPct: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro').value)||0) : 0, pedroValor: empresa==='Kratos' ? (parseFloat(document.getElementById('p-pedro-fijo').value)||0) : 0 });
   registrarClienteSiEsNuevo(clienteVal, locVal, empresa);
+  // SYNC FIX: auto-create the matching Pendiente cobro right away, so this project shows up in
+  // Collections immediately instead of sitting invisible there until someone remembers to log a
+  // payment for it by hand.
+  const cobroYaExiste = S.cobros.some(c => c.num===num && (c.empresa||'BH Pro')===empresa);
+  if (!cobroYaExiste && valorVal > 0) {
+    S.cobros.push({ id:gid(), num, cliente:clienteVal, monto:valorVal, fecha: inicioVal || new Date().toISOString().slice(0,10), estado:'Pendiente', tipo:'', cheque:'', fpago:'', empresa });
+  }
   saveData(); ['p-num','p-nom','p-val','p-ini','p-fin','p-not','p-loc','p-pedro'].forEach(id=>document.getElementById(id).value=''); renderAll();
 }
 // Auto-registers a client name into S.clientes the moment it's used anywhere (project, invoice,
@@ -2380,6 +2400,41 @@ async function loadBackupsList() {
   }
 }
 
+async function loadProyectosSinCobro() {
+  const box = document.getElementById('sin-cobro-result');
+  box.textContent = tt('Buscando...','Searching...');
+  try {
+    const res = await fetch('/api/proyectos/sin-cobro', {credentials:'same-origin'});
+    const raw = await res.text();
+    let d;
+    try { d = JSON.parse(raw); }
+    catch(e) { box.textContent = tt('Respuesta inesperada del servidor: ','Unexpected server response: ') + raw.slice(0,300); return; }
+    if (!res.ok) { box.textContent = tt('Error: ','Error: ') + (d.error||''); return; }
+    if (!d.total) {
+      box.innerHTML = `<span style="color:var(--green);">✅ ${tt('Todos los proyectos ya tienen su cobro correspondiente.','All projects already have their matching collection.')}</span>`;
+      return;
+    }
+    let html = `<div style="color:var(--gold);margin-bottom:8px;">⚠️ ${d.total} ${tt('proyecto(s) sin cobro','project(s) without a collection')}:</div>`;
+    html += d.proyectos.map(p => `<div style="font-size:.68rem;color:var(--gray);padding:2px 0;">#${p.num} (${p.empresa}) — ${p.nombre} — ${p.cliente||'?'} — ${fmt(p.valor)}</div>`).join('');
+    html += `<button class="btn btn-sm" style="width:100%;margin-top:10px;" onclick="crearCobrosFaltantes()">✅ ${tt('Crear los','Create the')} ${d.total} ${tt('cobro(s) Pendiente(s) ahora','pending collection(s) now')}</button>`;
+    box.innerHTML = html;
+  } catch(e) {
+    box.textContent = tt('Error de red: ','Network error: ') + e.message;
+  }
+}
+async function crearCobrosFaltantes() {
+  const box = document.getElementById('sin-cobro-result');
+  box.textContent = tt('Creando...','Creating...');
+  try {
+    const res = await fetch('/api/proyectos/crear-cobros-faltantes', {method:'POST', credentials:'same-origin'});
+    const d = await res.json();
+    box.innerHTML = `<span style="color:var(--green);">✅ ${d.creados} ${tt('cobro(s) creado(s).','collection(s) created.')}</span>`;
+    await loadData();
+    renderAll();
+  } catch(e) {
+    box.textContent = tt('Error: ','Error: ') + e.message;
+  }
+}
 async function loadRegistrosHuerfanos() {
   const box = document.getElementById('huerfanos-result');
   box.textContent = tt('Buscando...','Searching...');
