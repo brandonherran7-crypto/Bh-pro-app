@@ -236,8 +236,34 @@ app.get('/api/registros/huerfanos', adminAuth, (q, r) => {
     });
   } catch (e) { r.status(500).json({ error: e.message }); }
 });
-// Finds project numbers that exist in BOTH companies (BH Pro and Kratos use overlapping
-// numbering, e.g. both can have a #1002), plus any gasto/nómina rows that have no "empresa" tag
+// The reverse of "huérfanos": finds PROJECTS that have no matching cobro at all (which used to
+// happen because create_project never created one — now fixed going forward, but this catches
+// existing projects from before that fix, like the ones stuck invisible in Collections).
+app.get('/api/proyectos/sin-cobro', adminAuth, (q, r) => {
+  try {
+    const cobroExiste = (num, empresa) => (D.cobros||[]).some(c => c.num === num && (c.empresa||'BH Pro') === (empresa||'BH Pro'));
+    const sinCobro = D.proyectos.filter(p => !cobroExiste(p.num, p.empresa));
+    r.json({ total: sinCobro.length, proyectos: sinCobro.map(p=>({id:p.id, num:p.num, nombre:p.nombre, cliente:p.cliente, valor:p.valor, empresa:p.empresa||'BH Pro'})) });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
+app.post('/api/proyectos/crear-cobros-faltantes', adminAuth, (q, r) => {
+  try {
+    const cobroExiste = (num, empresa) => (D.cobros||[]).some(c => c.num === num && (c.empresa||'BH Pro') === (empresa||'BH Pro'));
+    let creados = 0;
+    D.proyectos.forEach(p => {
+      if (!cobroExiste(p.num, p.empresa)) {
+        D.cobros.push({
+          id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '_' + creados,
+          num: p.num, cliente: p.cliente||'', monto: p.valor||0, fecha: p.inicio || new Date().toISOString().slice(0,10),
+          estado: 'Pendiente', tipo: '', cheque: '', fpago: '', empresa: p.empresa||'BH Pro'
+        });
+        creados++;
+      }
+    });
+    if (creados > 0) saveToDisk();
+    r.json({ creados });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
 // of their own AND whose project number is one of those colliding ones — those are the rows that
 // can't be reliably assigned to a company by number alone and need a human to confirm.
 app.get('/api/proyectos/colisiones', adminAuth, (q, r) => {
@@ -651,20 +677,38 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       } else {
         nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
       }
+      if (!D.clientes) D.clientes = [];
+      // CONSISTENCY FIX: if this client already has a saved canonical location, always use THAT
+      // one instead of whatever loc text came with this specific call — otherwise the same real
+      // building ends up stored as several slightly different strings ("2701 N Course Dr..." vs
+      // "2701 N. Course Dr.,...") and the Locations tab treats them as different places.
+      const clienteExistente = D.clientes.find(c => (c.empresa||'BH Pro')===emp && c.nombre.trim().toLowerCase()===cliente.trim().toLowerCase());
+      const locFinal = (clienteExistente && clienteExistente.ubicacion) ? clienteExistente.ubicacion : (loc || '');
       D.proyectos.push({
         id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         num: nextNum, nombre, cliente, valor: valor||0,
         inicio: inicio || new Date().toISOString().slice(0,10), fin: '',
-        estado: estado || 'Activo', notas: '', loc: loc||'', empresa: emp,
+        estado: estado || 'Activo', notas: '', loc: locFinal, empresa: emp,
         pedroPct: 0
       });
-      if (!D.clientes) D.clientes = [];
-      const clienteYaExiste = D.clientes.some(c => (c.empresa||'BH Pro')===emp && c.nombre.trim().toLowerCase()===cliente.trim().toLowerCase());
-      if (!clienteYaExiste) {
-        D.clientes.push({ id: 'cli_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: cliente.trim(), ubicacion: loc||'', empresa: emp });
+      if (!clienteExistente) {
+        D.clientes.push({ id: 'cli_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: cliente.trim(), ubicacion: locFinal, empresa: emp });
+      }
+      // SYNC FIX: every project should have a matching cobro record from the moment it's created —
+      // that's how "Total Invoiced"/"Pending" in Collections stays in sync with Projects. Without
+      // this, a project just sits there invisible to Collections until someone remembers to
+      // register a payment for it by hand.
+      if (!D.cobros) D.cobros = [];
+      const cobroYaExiste = D.cobros.some(c => c.num === nextNum && (c.empresa||'BH Pro') === emp);
+      if (!cobroYaExiste) {
+        D.cobros.push({
+          id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+          num: nextNum, cliente, monto: valor||0, fecha: inicio || new Date().toISOString().slice(0,10),
+          estado: 'Pendiente', tipo: '', cheque: '', fpago: '', empresa: emp
+        });
       }
       saveToDisk();
-      return { resultMsg: `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}. Ya está guardado en la lista de Proyectos.`, changed: true };
+      return { resultMsg: `Proyecto #${nextNum} "${nombre}" creado para el cliente "${cliente}" con valor $${(valor||0).toFixed(2)}${locFinal?` en "${locFinal}"`:''}. También se registró el cobro Pendiente correspondiente por el mismo valor. Ya está todo guardado (Proyectos y Cobros).`, changed: true };
     }
     if (toolName === 'register_cobro') {
       const { proyectoNum, monto, fecha, notas, numeroReferencia } = input;
@@ -838,6 +882,22 @@ function logClaudeDebug(...args) {
   console.log(line);
 }
 app.get('/api/claude/debug-log', adminAuth, (q, r) => r.json({ lines: CLAUDE_DEBUG_LOG }));
+
+// Lets Brandon check, DIRECTLY in the browser (no login, no AI involved), exactly which version
+// of the code is actually live on Render right now, and which assistant tools it includes. This
+// exists specifically because "did you upload the new file?" / "is the deploy done?" has been a
+// recurring point of confusion — this settles it in one glance, with zero ambiguity.
+const BUILD_VERSION = 'v2026-08-20-edit-project-and-invoice-dates';
+const CURRENT_TOOL_NAMES = ['update_project_status','create_invoice','edit_invoice','edit_project','create_project','register_cobro','register_gasto','register_nomina','create_empleado','add_empleado_documento','limpiar_cobros_duplicados'];
+app.get('/api/version', (q, r) => {
+  r.json({
+    buildVersion: BUILD_VERSION,
+    serverStartedAt: SERVER_STARTED_AT,
+    toolNames: CURRENT_TOOL_NAMES,
+    tieneEditProject: CURRENT_TOOL_NAMES.includes('edit_project'),
+    tieneEditInvoiceConFecha: true
+  });
+});
 
 app.post('/api/claude', auth, async (q, r) => {
   try {
