@@ -264,6 +264,86 @@ app.post('/api/proyectos/crear-cobros-faltantes', adminAuth, (q, r) => {
     r.json({ creados });
   } catch (e) { r.status(500).json({ error: e.message }); }
 });
+// RETROACTIVE fix for locations already saved inconsistently (e.g. "2701 N Course Dr..." vs
+// "2701 N. Course Dr.,..." for the same client). For each client with more than one distinct
+// location string across their projects, picks the most-used one as canonical and rewrites every
+// project + the client's own saved ubicación to match it — so the Locations tab stops splitting
+// the same real building into several groups.
+function normalizarLocacionesInterno() {
+  let actualizados = 0;
+  const porCliente = {};
+  D.proyectos.forEach(p => {
+    if (!p.cliente) return;
+    const key = (p.empresa||'BH Pro') + '::' + p.cliente.trim().toLowerCase();
+    if (!porCliente[key]) porCliente[key] = { locs: {}, cliente: p.cliente, empresa: p.empresa||'BH Pro' };
+    const locKey = (p.loc||'').trim();
+    if (locKey) porCliente[key].locs[locKey] = (porCliente[key].locs[locKey]||0) + 1;
+  });
+  const cambios = [];
+  Object.values(porCliente).forEach(info => {
+    const locsEntries = Object.entries(info.locs);
+    if (locsEntries.length <= 1) return;
+    locsEntries.sort((a,b) => b[1]-a[1] || b[0].length-a[0].length);
+    const canonica = locsEntries[0][0];
+    cambios.push({ cliente: info.cliente, empresa: info.empresa, variantes: locsEntries.map(e=>e[0]), canonica });
+    D.proyectos.forEach(p => {
+      if ((p.empresa||'BH Pro')===info.empresa && p.cliente && p.cliente.trim().toLowerCase()===info.cliente.trim().toLowerCase() && (p.loc||'').trim() && (p.loc||'').trim() !== canonica) {
+        p.loc = canonica;
+        actualizados++;
+      }
+    });
+    if (!D.clientes) D.clientes = [];
+    let cli = D.clientes.find(c => (c.empresa||'BH Pro')===info.empresa && c.nombre.trim().toLowerCase()===info.cliente.trim().toLowerCase());
+    if (cli) cli.ubicacion = canonica;
+    else D.clientes.push({ id:'cli_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), nombre: info.cliente, ubicacion: canonica, empresa: info.empresa });
+  });
+  return { actualizados, cambios };
+}
+app.get('/api/proyectos/locaciones-inconsistentes', adminAuth, (q, r) => {
+  try {
+    // Compute WITHOUT writing anything: same grouping logic as the fix, just reported instead.
+    const porCliente = {};
+    D.proyectos.forEach(p => {
+      if (!p.cliente) return;
+      const key = (p.empresa||'BH Pro') + '::' + p.cliente.trim().toLowerCase();
+      if (!porCliente[key]) porCliente[key] = { locs: {}, cliente: p.cliente, empresa: p.empresa||'BH Pro' };
+      const locKey = (p.loc||'').trim();
+      if (locKey) porCliente[key].locs[locKey] = (porCliente[key].locs[locKey]||0) + 1;
+    });
+    const inconsistentes = Object.values(porCliente)
+      .filter(info => Object.keys(info.locs).length > 1)
+      .map(info => ({ cliente: info.cliente, empresa: info.empresa, variantes: Object.entries(info.locs).map(([loc,count])=>({loc,count})) }));
+    r.json({ total: inconsistentes.length, clientes: inconsistentes });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
+app.post('/api/proyectos/normalizar-locaciones', adminAuth, (q, r) => {
+  try {
+    const { actualizados, cambios } = normalizarLocacionesInterno();
+    if (actualizados > 0) saveToDisk();
+    r.json({ actualizados, cambios });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
+// ONE-TAP combined fix: creates missing cobros AND normalizes locations in a single call, so
+// Brandon doesn't have to run two separate tools every time something gets out of sync.
+app.post('/api/proyectos/arreglar-todo', adminAuth, (q, r) => {
+  try {
+    const cobroExiste = (num, empresa) => (D.cobros||[]).some(c => c.num === num && (c.empresa||'BH Pro') === (empresa||'BH Pro'));
+    let cobrosCreados = 0;
+    D.proyectos.forEach(p => {
+      if (!cobroExiste(p.num, p.empresa)) {
+        D.cobros.push({
+          id: 'cob_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '_' + cobrosCreados,
+          num: p.num, cliente: p.cliente||'', monto: p.valor||0, fecha: p.inicio || new Date().toISOString().slice(0,10),
+          estado: 'Pendiente', tipo: '', cheque: '', fpago: '', empresa: p.empresa||'BH Pro'
+        });
+        cobrosCreados++;
+      }
+    });
+    const { actualizados: locacionesActualizadas } = normalizarLocacionesInterno();
+    if (cobrosCreados > 0 || locacionesActualizadas > 0) saveToDisk();
+    r.json({ cobrosCreados, locacionesActualizadas });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
 // of their own AND whose project number is one of those colliding ones — those are the rows that
 // can't be reliably assigned to a company by number alone and need a human to confirm.
 app.get('/api/proyectos/colisiones', adminAuth, (q, r) => {
