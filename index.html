@@ -1119,6 +1119,9 @@ function savePdEdit() {
   const newNombre = document.getElementById('pd-e-nombre').value.trim();
   const newValor = parseFloat(document.getElementById('pd-e-valor').value) || 0;
   if (!newNombre) return alert('El nombre del proyecto no puede quedar vacío');
+  const empresaActual = p.empresa || 'BH Pro';
+  const numActual = p.num;
+  const valorCambio = Math.abs((p.valor||0) - newValor) > 0.01;
   p.nombre = newNombre;
   p.cliente = document.getElementById('pd-e-cliente').value.trim();
   p.valor = newValor;
@@ -1131,6 +1134,22 @@ function savePdEdit() {
     p.pedroTipo = document.getElementById('pd-e-pedro-tipo').value;
     p.pedroPct = parseFloat(document.getElementById('pd-e-pedropct').value) || 0;
     p.pedroValor = parseFloat(document.getElementById('pd-e-pedrofijo').value) || 0;
+  }
+  // SYNC FIX: if the project's value was corrected, propagate that same number to the matching
+  // invoice (scaling its line items proportionally so they still add up correctly) and to the
+  // matching cobro — instead of leaving the project, invoice PDF, and collection amount disagreeing.
+  if (valorCambio) {
+    const facturaLigada = S.facturas.find(f => f.number===numActual && (f.empresa||'BH Pro')===empresaActual);
+    if (facturaLigada && Array.isArray(facturaLigada.items) && facturaLigada.items.length) {
+      const totalActualFactura = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0) || facturaLigada.amount || 1;
+      const factorEscala = newValor / totalActualFactura;
+      facturaLigada.items = facturaLigada.items.map(it => ({ ...it, rate: Math.round(((it.rate||0)*factorEscala)*100)/100 }));
+      facturaLigada.amount = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0);
+    } else if (facturaLigada) {
+      facturaLigada.amount = newValor;
+    }
+    const cobroLigado = S.cobros.find(c => c.num===numActual && (c.empresa||'BH Pro')===empresaActual);
+    if (cobroLigado) cobroLigado.monto = newValor;
   }
   saveData();
   document.getElementById('pd-edit-form').style.display = 'none';
@@ -2980,7 +2999,9 @@ function saveInvoice() {
   const inv = Object.assign({id:gid(), sent:false, createdAt:new Date().toISOString()}, built);
   const invEmpresa = inv.empresa || ACTIVE_COMPANY;
   S.facturas.push(inv);
-  registrarClienteSiEsNuevo(inv.billTo, '', invEmpresa);
+  // FIX: wherever the invoice is billed IS the location — that address must propagate to both
+  // the client's saved location and the project's own "loc" field, not get silently dropped.
+  registrarClienteSiEsNuevo(inv.billTo, inv.billAddress || '', invEmpresa);
   // Add to cobros if not exists (scoped to this company, never cross-matches the other company)
   if (!S.cobros.find(c=>c.num===inv.number && (c.empresa||invEmpresa)===invEmpresa)) {
     S.cobros.push({ id:gid(), num:inv.number, cliente:inv.billTo, monto:inv.amount, fecha:inv.date, estado:'Pendiente', tipo:'', cheque:'', fpago:'', empresa: invEmpresa });
@@ -2989,6 +3010,8 @@ function saveInvoice() {
   const proy = S.proyectos.find(p=>p.num===inv.number && (p.empresa||'BH Pro')===invEmpresa);
   if (proy) {
     if (proy.estado==='Activo') proy.estado='Completado';
+    // The billing address always wins as the project's location — "a donde se factura esa es la locación".
+    if (inv.billAddress) proy.loc = inv.billAddress;
   } else {
     S.proyectos.push({
       id: gid(), num: inv.number,
@@ -2997,7 +3020,7 @@ function saveInvoice() {
       inicio: inv.date || '', fin: inv.date || '',
       valor: inv.amount || 0,
       estado: 'Completado',
-      notas: '', loc: '',
+      notas: '', loc: inv.billAddress || '',
       empresa: invEmpresa,
       pedroPct: 0
     });
