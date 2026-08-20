@@ -210,6 +210,32 @@ app.get('/api/cobros/duplicados', adminAuth, (q, r) => {
     r.json({ duplicados, totalGrupos: duplicados.length });
   } catch (e) { r.status(500).json({ error: e.message }); }
 });
+// Finds cobros/gastos/nómina/facturas whose project number doesn't match any CURRENT project —
+// these are "orphans" left behind whenever a project got deleted without cascading (the old
+// behavior), or from any other data mismatch. This is exactly what causes Projects vs Collections
+// to not add up (a collection referencing a project # that no longer exists).
+app.get('/api/registros/huerfanos', adminAuth, (q, r) => {
+  try {
+    const numsPorEmpresa = {};
+    D.proyectos.forEach(p => {
+      const emp2 = p.empresa || 'BH Pro';
+      if (!numsPorEmpresa[emp2]) numsPorEmpresa[emp2] = new Set();
+      numsPorEmpresa[emp2].add(p.num);
+    });
+    const existeProyecto = (num, empresa) => numsPorEmpresa[empresa||'BH Pro'] && numsPorEmpresa[empresa||'BH Pro'].has(num);
+    const cobrosHuerfanos = (D.cobros||[]).filter(c => c.num && !existeProyecto(c.num, c.empresa||'BH Pro'));
+    const gastosHuerfanos = (D.gastos||[]).filter(g => g.proy && !existeProyecto(g.proy, g.empresa||'BH Pro'));
+    const nominaHuerfana = (D.nomina||[]).filter(n => n.proy && !existeProyecto(n.proy, n.empresa||'BH Pro'));
+    const facturasHuerfanas = (D.facturas||[]).filter(f => f.number && !existeProyecto(f.number, f.empresa||'BH Pro'));
+    r.json({
+      total: cobrosHuerfanos.length + gastosHuerfanos.length + nominaHuerfana.length + facturasHuerfanas.length,
+      cobros: cobrosHuerfanos.map(c=>({id:c.id, num:c.num, empresa:c.empresa||'BH Pro', monto:c.monto, estado:c.estado, cliente:c.cliente})),
+      gastos: gastosHuerfanos.map(g=>({id:g.id, proy:g.proy, empresa:g.empresa||'BH Pro', monto:g.monto, desc:g.desc})),
+      nomina: nominaHuerfana.map(n=>({id:n.id, proy:n.proy, empresa:n.empresa||'BH Pro', empleado:n.empleado, total:n.total})),
+      facturas: facturasHuerfanas.map(f=>({id:f.id, number:f.number, empresa:f.empresa||'BH Pro', billTo:f.billTo, amount:f.amount}))
+    });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
 // Finds project numbers that exist in BOTH companies (BH Pro and Kratos use overlapping
 // numbering, e.g. both can have a #1002), plus any gasto/nómina rows that have no "empresa" tag
 // of their own AND whose project number is one of those colliding ones — those are the rows that
@@ -557,10 +583,27 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Factura #${numero} actualizada:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
     }
     if (toolName === 'create_project') {
-      const { nombre, cliente, valor, loc, estado, numero } = input;
+      const { nombre, cliente, valor, loc, estado, numero, confirmarDuplicado } = input;
       if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
       const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
       const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
+      // SAFETY CHECK: if a project with essentially the same name, client, and value already
+      // exists, this is almost certainly the SAME real job being submitted again (e.g. the same
+      // invoice photo sent twice, or "créame este proyecto" on something already registered) — not
+      // a new one. Block auto-creation and make the assistant confirm with the user first, instead
+      // of silently piling up duplicate numbered records for one real project.
+      const normalizar = s => (s||'').trim().toLowerCase().replace(/\s+/g,' ');
+      const posibleDuplicado = proyectosEmp.find(p =>
+        normalizar(p.nombre) === normalizar(nombre) &&
+        normalizar(p.cliente) === normalizar(cliente) &&
+        Math.abs((p.valor||0) - (valor||0)) < 0.01
+      );
+      if (posibleDuplicado && confirmarDuplicado !== true) {
+        return {
+          resultMsg: `Ya existe el proyecto #${posibleDuplicado.num} "${posibleDuplicado.nombre}" para "${posibleDuplicado.cliente}" con el mismo valor ($${(valor||0).toFixed(2)}) — esto parece ser el mismo trabajo, no uno nuevo. Pregúntale al usuario: ¿de verdad quiere crear un proyecto NUEVO y separado con estos mismos datos, o se refería al #${posibleDuplicado.num} que ya existe? Si el usuario confirma que sí quiere uno nuevo y distinto, vuelve a llamar a create_project con los mismos datos y "confirmarDuplicado": true. Si en realidad se refería al existente, no crees nada — usa el #${posibleDuplicado.num} para lo que necesite (ej. register_cobro, edit_invoice, etc.).`,
+          changed: false
+        };
+      }
       const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
       const facNums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
       let nextNum;
@@ -835,7 +878,7 @@ app.post('/api/claude', auth, async (q, r) => {
       },
       {
         name: 'create_project',
-        description: 'Crea un proyecto nuevo. Si el usuario da un número específico (ej. "1001", o el mismo número que un invoice), pásalo en "numero" para que el proyecto quede con ese número — así coincide con la factura. Si no da número, se asigna automáticamente el siguiente en la secuencia. Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto.',
+        description: 'Crea un proyecto nuevo. Si el usuario da un número específico (ej. "1001", o el mismo número que un invoice), pásalo en "numero" para que el proyecto quede con ese número — así coincide con la factura. Si no da número, se asigna automáticamente el siguiente en la secuencia. Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto. IMPORTANTE: si ya existe un proyecto con el mismo nombre, cliente y valor, esta herramienta NO lo crea — te devuelve un aviso de posible duplicado en vez de un error. Cuando eso pase, pregúntale al usuario si de verdad quiere uno nuevo y separado; solo si confirma que sí, vuelve a llamarla con "confirmarDuplicado": true.',
         input_schema: {
           type: 'object',
           properties: {
@@ -844,7 +887,8 @@ app.post('/api/claude', auth, async (q, r) => {
             valor: { type: 'number', description: 'Valor cotizado del proyecto en dólares' },
             loc: { type: 'string', description: 'Ubicación/edificio (opcional)' },
             estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Por defecto Activo si no se especifica' },
-            numero: { type: 'string', description: 'Número de proyecto explícito a usar (ej. si debe coincidir con el número de invoice que el usuario mencionó). Si ese número ya está en uso, se ignora y se autonumera.' }
+            numero: { type: 'string', description: 'Número de proyecto explícito a usar (ej. si debe coincidir con el número de invoice que el usuario mencionó). Si ese número ya está en uso, se ignora y se autonumera.' },
+            confirmarDuplicado: { type: 'boolean', description: 'Solo pásalo como true si ya le avisaste al usuario que parece un duplicado de un proyecto existente Y él confirmó explícitamente que quiere crear uno nuevo y separado de todas formas.' }
           },
           required: ['nombre', 'cliente', 'valor']
         }
