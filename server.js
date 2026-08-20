@@ -523,6 +523,39 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       saveToDisk();
       return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`, changed: true };
     }
+    if (toolName === 'edit_invoice') {
+      const { numero, billTo, note, items, confirmado } = input;
+      if (!numero) return { resultMsg: 'Error: falta el número de factura a editar.', changed: false };
+      const inv = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
+      if (!inv) return { resultMsg: `Error: no encontré ninguna factura #${numero} en ${emp}.`, changed: false };
+      // Build a preview of what WOULD change without touching anything yet.
+      const cambios = [];
+      if (billTo !== undefined && billTo !== inv.billTo) cambios.push(`Bill To: "${inv.billTo||''}" → "${billTo}"`);
+      if (note !== undefined && note !== inv.note) cambios.push(`Nota: "${inv.note||'(vacía)'}" → "${note}"`);
+      let nuevoTotal = inv.amount;
+      if (Array.isArray(items) && items.length) {
+        const cleanItems = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
+        nuevoTotal = cleanItems.reduce((s,it)=>s+(it.qty*it.rate),0);
+        cambios.push(`Ítems reemplazados por ${cleanItems.length} línea(s), nuevo total $${nuevoTotal.toFixed(2)} (antes $${(inv.amount||0).toFixed(2)})`);
+      }
+      if (!cambios.length) return { resultMsg: `No hay ningún cambio real que aplicar a la factura #${numero} — los valores que diste son iguales a los que ya tiene.`, changed: false };
+      // SAFETY GATE: this is a hard requirement, not just a prompt instruction — without
+      // confirmado === true, the tool NEVER writes anything, no matter what the model intended.
+      if (confirmado !== true) {
+        return {
+          resultMsg: `Esto es lo que cambiaría en la factura #${numero} (todavía NO se ha aplicado nada):\n` + cambios.map(c=>'- '+c).join('\n') + `\n\nPregúntale al usuario si confirma, y solo si dice que sí, vuelve a llamar a edit_invoice con los mismos datos y "confirmado": true.`,
+          changed: false
+        };
+      }
+      if (billTo !== undefined) { inv.billTo = billTo; inv.shipTo = billTo; }
+      if (note !== undefined) inv.note = note;
+      if (Array.isArray(items) && items.length) {
+        inv.items = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
+        inv.amount = inv.items.reduce((s,it)=>s+(it.qty*it.rate),0);
+      }
+      saveToDisk();
+      return { resultMsg: `Factura #${numero} actualizada:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
+    }
     if (toolName === 'create_project') {
       const { nombre, cliente, valor, loc, estado, numero } = input;
       if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
@@ -770,6 +803,34 @@ app.post('/api/claude', auth, async (q, r) => {
             }
           },
           required: ['billTo', 'items']
+        }
+      },
+      {
+        name: 'edit_invoice',
+        description: 'Modifica una factura YA EXISTENTE (bill to, nota, o reemplazar sus ítems/descripción). Úsala cuando el usuario pida agregar/cambiar la descripción, scope of work, u otro dato de una factura que ya tiene número — NUNCA crees una factura nueva para esto, edita la existente. IMPORTANTE — flujo obligatorio en dos pasos: (1) Primero llama a esta herramienta SIN "confirmado" (o con confirmado:false). Esto NO aplica ningún cambio — solo te devuelve una vista previa de qué cambiaría. Muéstrale esa vista previa al usuario tal cual y pregúntale si confirma. (2) Solo si el usuario responde que sí en su siguiente mensaje, vuelve a llamar a esta misma herramienta con los mismos datos y "confirmado": true para aplicarlo de verdad. Nunca pases confirmado:true en el primer intento, incluso si el usuario ya sonaba seguro en su mensaje original — siempre hay que mostrarle la vista previa primero.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            numero: { type: 'string', description: 'Número de la factura existente a editar' },
+            billTo: { type: 'string', description: 'Nuevo Bill To, solo si el usuario pide cambiarlo' },
+            note: { type: 'string', description: 'Nueva nota al pie, solo si el usuario pide cambiarla' },
+            items: {
+              type: 'array',
+              description: 'Si se incluye, REEMPLAZA por completo los ítems actuales de la factura con esta lista. Solo inclúyelo si el usuario quiere cambiar la descripción/ítems.',
+              items: {
+                type: 'object',
+                properties: {
+                  desc: { type: 'string' },
+                  detail: { type: 'string' },
+                  qty: { type: 'number' },
+                  rate: { type: 'number' }
+                },
+                required: ['desc', 'qty', 'rate']
+              }
+            },
+            confirmado: { type: 'boolean', description: 'Déjalo sin pasar (o false) para solo ver la vista previa del cambio. Pásalo como true SOLO después de que el usuario confirmó explícitamente que sí quiere aplicar el cambio mostrado.' }
+          },
+          required: ['numero']
         }
       },
       {
