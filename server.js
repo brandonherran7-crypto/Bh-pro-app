@@ -550,7 +550,7 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`, changed: true };
     }
     if (toolName === 'edit_invoice') {
-      const { numero, billTo, note, items, confirmado } = input;
+      const { numero, billTo, note, items, fecha, dueDate, confirmado } = input;
       if (!numero) return { resultMsg: 'Error: falta el número de factura a editar.', changed: false };
       const inv = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
       if (!inv) return { resultMsg: `Error: no encontré ninguna factura #${numero} en ${emp}.`, changed: false };
@@ -558,6 +558,8 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       const cambios = [];
       if (billTo !== undefined && billTo !== inv.billTo) cambios.push(`Bill To: "${inv.billTo||''}" → "${billTo}"`);
       if (note !== undefined && note !== inv.note) cambios.push(`Nota: "${inv.note||'(vacía)'}" → "${note}"`);
+      if (fecha !== undefined && fecha !== inv.date) cambios.push(`Fecha de factura: "${inv.date||''}" → "${fecha}"`);
+      if (dueDate !== undefined && dueDate !== inv.dueDate) cambios.push(`Fecha de vencimiento: "${inv.dueDate||''}" → "${dueDate}"`);
       let nuevoTotal = inv.amount;
       if (Array.isArray(items) && items.length) {
         const cleanItems = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
@@ -575,6 +577,8 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       }
       if (billTo !== undefined) { inv.billTo = billTo; inv.shipTo = billTo; }
       if (note !== undefined) inv.note = note;
+      if (fecha !== undefined) inv.date = fecha;
+      if (dueDate !== undefined) inv.dueDate = dueDate;
       if (Array.isArray(items) && items.length) {
         inv.items = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
         inv.amount = inv.items.reduce((s,it)=>s+(it.qty*it.rate),0);
@@ -618,7 +622,7 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Proyecto #${numero} actualizado:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
     }
     if (toolName === 'create_project') {
-      const { nombre, cliente, valor, loc, estado, numero, confirmarDuplicado } = input;
+      const { nombre, cliente, valor, loc, estado, numero, inicio, confirmarDuplicado } = input;
       if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
       const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
       const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
@@ -650,7 +654,7 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       D.proyectos.push({
         id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         num: nextNum, nombre, cliente, valor: valor||0,
-        inicio: new Date().toISOString().slice(0,10), fin: '',
+        inicio: inicio || new Date().toISOString().slice(0,10), fin: '',
         estado: estado || 'Activo', notas: '', loc: loc||'', empresa: emp,
         pedroPct: 0
       });
@@ -885,13 +889,15 @@ app.post('/api/claude', auth, async (q, r) => {
       },
       {
         name: 'edit_invoice',
-        description: 'Modifica una factura YA EXISTENTE (bill to, nota, o reemplazar sus ítems/descripción). Úsala cuando el usuario pida agregar/cambiar la descripción, scope of work, u otro dato de una factura que ya tiene número — NUNCA crees una factura nueva para esto, edita la existente. IMPORTANTE — flujo obligatorio en dos pasos: (1) Primero llama a esta herramienta SIN "confirmado" (o con confirmado:false). Esto NO aplica ningún cambio — solo te devuelve una vista previa de qué cambiaría. Muéstrale esa vista previa al usuario tal cual y pregúntale si confirma. (2) Solo si el usuario responde que sí en su siguiente mensaje, vuelve a llamar a esta misma herramienta con los mismos datos y "confirmado": true para aplicarlo de verdad. Nunca pases confirmado:true en el primer intento, incluso si el usuario ya sonaba seguro en su mensaje original — siempre hay que mostrarle la vista previa primero.',
+        description: 'Modifica una factura YA EXISTENTE (bill to, nota, fecha, fecha de vencimiento, o reemplazar sus ítems/descripción). Úsala cuando el usuario pida agregar/cambiar la descripción, scope of work, fecha, u otro dato de una factura que ya tiene número — NUNCA crees una factura nueva para esto, edita la existente. IMPORTANTE — flujo obligatorio en dos pasos: (1) Primero llama a esta herramienta SIN "confirmado" (o con confirmado:false). Esto NO aplica ningún cambio — solo te devuelve una vista previa de qué cambiaría. Muéstrale esa vista previa al usuario tal cual y pregúntale si confirma. (2) Solo si el usuario responde que sí en su siguiente mensaje, vuelve a llamar a esta misma herramienta con los mismos datos y "confirmado": true para aplicarlo de verdad. Nunca pases confirmado:true en el primer intento, incluso si el usuario ya sonaba seguro en su mensaje original — siempre hay que mostrarle la vista previa primero.',
         input_schema: {
           type: 'object',
           properties: {
             numero: { type: 'string', description: 'Número de la factura existente a editar' },
             billTo: { type: 'string', description: 'Nuevo Bill To, solo si el usuario pide cambiarlo' },
             note: { type: 'string', description: 'Nueva nota al pie, solo si el usuario pide cambiarla' },
+            fecha: { type: 'string', description: 'Nueva fecha de la factura en formato YYYY-MM-DD, solo si el usuario pide corregirla (ej. para que coincida con la fecha real del documento/foto/proyecto)' },
+            dueDate: { type: 'string', description: 'Nueva fecha de vencimiento en formato YYYY-MM-DD, solo si el usuario pide cambiarla' },
             items: {
               type: 'array',
               description: 'Si se incluye, REEMPLAZA por completo los ítems actuales de la factura con esta lista. Solo inclúyelo si el usuario quiere cambiar la descripción/ítems.',
@@ -943,6 +949,7 @@ app.post('/api/claude', auth, async (q, r) => {
             loc: { type: 'string', description: 'Ubicación/edificio (opcional)' },
             estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Por defecto Activo si no se especifica' },
             numero: { type: 'string', description: 'Número de proyecto explícito a usar (ej. si debe coincidir con el número de invoice que el usuario mencionó). Si ese número ya está en uso, se ignora y se autonumera.' },
+            inicio: { type: 'string', description: 'Fecha de inicio en formato YYYY-MM-DD. Si vienes de una foto de una factura/invoice, usa la MISMA fecha que aparece ahí (no la fecha de hoy) — así el proyecto y la factura quedan con la misma fecha real del trabajo.' },
             confirmarDuplicado: { type: 'boolean', description: 'Solo pásalo como true si ya le avisaste al usuario que parece un duplicado de un proyecto existente Y él confirmó explícitamente que quiere crear uno nuevo y separado de todas formas.' }
           },
           required: ['nombre', 'cliente', 'valor']
