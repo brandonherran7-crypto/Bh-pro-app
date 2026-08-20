@@ -411,7 +411,19 @@ app.post('/api/data/full',auth,(q,r)=>{
   const role = verifyAuthCookie(q.headers.cookie);
   ['proyectos','gastos','nomina','cobros','abonos','facturas','locacionesFacturacion','empleados','clientes'].forEach(k=>{
     if(q.body[k]!==undefined){
-      const filtered = q.body[k].filter(item=>!D.deletedIds.includes(item.id));
+      const incoming = q.body[k].filter(item=>!D.deletedIds.includes(item.id));
+      // CRITICAL FIX: merge by id with whatever is CURRENTLY in D instead of blindly replacing.
+      // A blind replace here is what let a browser's periodic save silently erase an item that
+      // some OTHER source — the AI assistant's direct D.gastos.push(), another browser tab,
+      // Arlene's own session — wrote in the narrow window between this client's last read and
+      // this write. Only items actually removed via the explicit delete-item endpoint (tracked in
+      // deletedIds) get dropped; anything else already in D survives even if this particular
+      // client's snapshot didn't know about it yet.
+      const keyOf = item => item.id || ('num:' + item.num);
+      const mergedMap = new Map();
+      (D[k]||[]).forEach(item => { if (!D.deletedIds.includes(item.id)) mergedMap.set(keyOf(item), item); });
+      incoming.forEach(item => mergedMap.set(keyOf(item), item));
+      const filtered = Array.from(mergedMap.values());
       try { logAuditDiff(role, k, D[k], filtered); } catch(e) { console.error('[Audit log] error diffing', k, e.message); }
       D[k]=filtered;
     }
@@ -630,7 +642,7 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Se actualizaron ${updated.length} proyecto(s) a estado "${estado}": ${updated.join(', ')||'(ninguno encontrado)'}.`, changed: updated.length > 0 };
     }
     if (toolName === 'create_invoice') {
-      const { billTo, projectName, items, numero, fecha, note } = input;
+      const { billTo, billAddress, projectName, items, numero, fecha, note } = input;
       if (!billTo || !Array.isArray(items) || !items.length) return { resultMsg: 'Error: faltan datos (billTo o items) para crear la factura.', changed: false };
       const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
       const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
@@ -648,21 +660,28 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       D.facturas.push({
         id: 'inv_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         number: nextNum, empresa: emp, date: invDate, dueDate: invDate,
-        billTo, shipTo: billTo, amount: total, items: cleanItems,
+        billTo, shipTo: billTo, billAddress: billAddress || '', amount: total, items: cleanItems,
         item: projectName || cleanItems[0]?.desc || '', projectName: projectName || cleanItems[0]?.desc || '',
         note: note || '', sent: false
       });
+      // "A donde se factura esa es la locación" — the billing address always defines the
+      // matching project's location, if that project already exists.
+      if (billAddress) {
+        const proyMatch = D.proyectos.find(p => p.num === nextNum && (p.empresa||'BH Pro') === emp);
+        if (proyMatch) proyMatch.loc = billAddress;
+      }
       saveToDisk();
-      return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.`, changed: true };
+      return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.${billAddress ? ` La ubicación del proyecto #${nextNum} quedó como "${billAddress}".` : ''}`, changed: true };
     }
     if (toolName === 'edit_invoice') {
-      const { numero, billTo, note, items, fecha, dueDate, confirmado } = input;
+      const { numero, billTo, billAddress, note, items, fecha, dueDate, confirmado } = input;
       if (!numero) return { resultMsg: 'Error: falta el número de factura a editar.', changed: false };
       const inv = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
       if (!inv) return { resultMsg: `Error: no encontré ninguna factura #${numero} en ${emp}.`, changed: false };
       // Build a preview of what WOULD change without touching anything yet.
       const cambios = [];
       if (billTo !== undefined && billTo !== inv.billTo) cambios.push(`Bill To: "${inv.billTo||''}" → "${billTo}"`);
+      if (billAddress !== undefined && billAddress !== inv.billAddress) cambios.push(`Dirección de facturación (y ubicación del proyecto): "${inv.billAddress||''}" → "${billAddress}"`);
       if (note !== undefined && note !== inv.note) cambios.push(`Nota: "${inv.note||'(vacía)'}" → "${note}"`);
       if (fecha !== undefined && fecha !== inv.date) cambios.push(`Fecha de factura: "${inv.date||''}" → "${fecha}"`);
       if (dueDate !== undefined && dueDate !== inv.dueDate) cambios.push(`Fecha de vencimiento: "${inv.dueDate||''}" → "${dueDate}"`);
@@ -682,6 +701,13 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
         };
       }
       if (billTo !== undefined) { inv.billTo = billTo; inv.shipTo = billTo; }
+      if (billAddress !== undefined) {
+        inv.billAddress = billAddress;
+        // "A donde se factura esa es la locación" — always keep the matching project's ubicación
+        // in sync with the invoice's billing address.
+        const proyMatch = D.proyectos.find(p => p.num === String(numero) && (p.empresa||'BH Pro') === emp);
+        if (proyMatch) proyMatch.loc = billAddress;
+      }
       if (note !== undefined) inv.note = note;
       if (fecha !== undefined) inv.date = fecha;
       if (dueDate !== undefined) inv.dueDate = dueDate;
@@ -718,14 +744,36 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       }
       if (nombre !== undefined) proj.nombre = nombre;
       if (cliente !== undefined) proj.cliente = cliente;
-      if (valor !== undefined) proj.valor = valor;
+      let mensajeSync = '';
+      if (valor !== undefined) {
+        proj.valor = valor;
+        // SYNC FIX: keep the linked invoice (scaling items proportionally) and cobro amount
+        // matching the corrected project value — "a donde se factura esa es la locación" applied
+        // the same way to money: the project's value is the source of truth for everything.
+        const facturaLigada = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
+        if (facturaLigada && Array.isArray(facturaLigada.items) && facturaLigada.items.length) {
+          const totalActualFactura = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0) || facturaLigada.amount || 1;
+          const factorEscala = valor / totalActualFactura;
+          facturaLigada.items = facturaLigada.items.map(it => ({ ...it, rate: Math.round(((it.rate||0)*factorEscala)*100)/100 }));
+          facturaLigada.amount = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0);
+          mensajeSync += ` La factura #${numero} se ajustó al mismo valor.`;
+        } else if (facturaLigada) {
+          facturaLigada.amount = valor;
+          mensajeSync += ` La factura #${numero} se ajustó al mismo valor.`;
+        }
+        const cobroLigado = D.cobros.find(c => c.num === String(numero) && (c.empresa||'BH Pro') === emp);
+        if (cobroLigado) {
+          cobroLigado.monto = valor;
+          mensajeSync += ` El cobro también quedó en $${valor.toFixed(2)}.`;
+        }
+      }
       if (loc !== undefined) proj.loc = loc;
       if (estado !== undefined) proj.estado = estado;
       if (notas !== undefined) proj.notas = notas;
       if (inicio !== undefined) proj.inicio = inicio;
       if (fin !== undefined) proj.fin = fin;
       saveToDisk();
-      return { resultMsg: `Proyecto #${numero} actualizado:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
+      return { resultMsg: `Proyecto #${numero} actualizado:\n` + cambios.map(c=>'- '+c).join('\n') + mensajeSync, changed: true };
     }
     if (toolName === 'create_project') {
       const { nombre, cliente, valor, loc, estado, numero, inicio, confirmarDuplicado } = input;
@@ -1005,6 +1053,7 @@ app.post('/api/claude', auth, async (q, r) => {
           type: 'object',
           properties: {
             billTo: { type: 'string', description: 'Nombre del cliente/edificio a facturar' },
+            billAddress: { type: 'string', description: 'Dirección física de facturación (a dónde se factura). IMPORTANTE: esta dirección se usa automáticamente como la ubicación (loc) del proyecto correspondiente — "a donde se factura esa es la locación".' },
             projectName: { type: 'string', description: 'Nombre del proyecto/trabajo' },
             numero: { type: 'string', description: 'Número de factura explícito (ej. para que coincida con el número de proyecto ya creado). Si ese número ya está en uso, se ignora y se autonumera.' },
             fecha: { type: 'string', description: 'Fecha de la factura en formato YYYY-MM-DD, si se puede leer de una foto; si no, se usa la fecha de hoy' },
@@ -1035,6 +1084,7 @@ app.post('/api/claude', auth, async (q, r) => {
           properties: {
             numero: { type: 'string', description: 'Número de la factura existente a editar' },
             billTo: { type: 'string', description: 'Nuevo Bill To, solo si el usuario pide cambiarlo' },
+            billAddress: { type: 'string', description: 'Nueva dirección de facturación, solo si el usuario pide corregirla. Al cambiarla, la ubicación (loc) del proyecto correspondiente se actualiza automáticamente a este mismo valor.' },
             note: { type: 'string', description: 'Nueva nota al pie, solo si el usuario pide cambiarla' },
             fecha: { type: 'string', description: 'Nueva fecha de la factura en formato YYYY-MM-DD, solo si el usuario pide corregirla (ej. para que coincida con la fecha real del documento/foto/proyecto)' },
             dueDate: { type: 'string', description: 'Nueva fecha de vencimiento en formato YYYY-MM-DD, solo si el usuario pide cambiarla' },
