@@ -418,8 +418,9 @@ select option{background:var(--black-3);}
     <div style="margin-bottom:10px;"><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="emd-notas"></div>
     <button class="btn btn-sm" style="width:100%;margin-bottom:14px;" onclick="saveEmpleadoEdit()" data-i18n="btn.guardar_cambios">💾 Guardar Cambios</button>
 
-    <div class="stats" style="grid-template-columns:1fr;margin-bottom:16px;">
+    <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px;">
       <div class="sc"><div class="sv g" id="emd-total-pagado">$0</div><div class="sl2" data-i18n="lbl.total_pagado_historico">Total Pagado (histórico)</div></div>
+      <div class="sc"><div class="sv" id="emd-total-pendiente" style="color:var(--gold);">$0</div><div class="sl2" data-i18n="lbl.total_pendiente_emp">Pendiente por Pagar</div></div>
     </div>
 
     <div class="sl" data-i18n="ct.documentos">📎 Documentos</div>
@@ -478,13 +479,16 @@ select option{background:var(--black-3);}
     <div class="fg"><div><div class="fl" data-i18n="fld.empleado">Empleado</div><input type="text" id="n-emp" list="n-emp-list" placeholder="Antonio" onfocus="populateEmpleadoDatalist()" onchange="autofillEmpleadoTarifa()"></div><div><div class="fl" data-i18n="fld.total_pagado">Total Pagado $</div><input type="number" id="n-tot" placeholder="0"></div></div>
     <datalist id="n-emp-list"></datalist>
     <div class="fg"><div><div class="fl" data-i18n="fld.horasdias">Horas/Días</div><input type="number" id="n-hor" placeholder="1"></div><div><div class="fl" data-i18n="fld.tarifa">Tarifa $</div><input type="number" id="n-tar" placeholder="0"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="n-est"><option value="Pagado" data-i18n="lbl.pagado">Pagado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div><div></div></div>
+    <div id="n-emp-balance" style="font-size:.7rem;color:var(--gold);margin-bottom:8px;"></div>
+    <div style="margin-bottom:8px;"><div class="fl">Comprobante de pago (Zelle, wire, cash app...) (opcional)</div><input type="file" id="n-foto" accept="image/*" onchange="previewNominaFoto(this)"><div id="n-foto-preview" style="margin-top:6px;"></div></div>
     <div style="margin-bottom:6px;"><div class="fl" data-i18n="fld.notas">Notas</div><input type="text" id="n-not" placeholder="1 day labor..."></div>
     <button class="btn" onclick="addNomina()" data-i18n="btn.registrar_pago">+ Registrar Pago</button>
   </div>
   <div class="search-bar"><span style="color:var(--gold)">🔍</span><input type="text" id="sq-n" placeholder="Buscar empleado o proyecto..." data-i18n-ph="ph.buscar_empleado" oninput="renderNomina()"></div>
   <div class="sinfo" id="si-n"></div>
   <div class="sl" data-i18n="lbl.registro_de_n_mina">Registro de Nómina</div>
-  <div class="tw"><table><thead><tr><th data-i18n="fld.fecha">Fecha</th><th>#Proy</th><th data-i18n="fld.empleado">Empleado</th><th>Hrs</th><th>Tarifa</th><th data-i18n="lbl.total">Total</th><th data-i18n="fld.notas">Notas</th><th></th></tr></thead><tbody id="tb-n"></tbody><tfoot><tr class="tr"><td colspan="5">TOTAL</td><td id="tf-nt">$0</td><td colspan="2"></td></tr></tfoot></table></div>
+  <div class="tw"><table><thead><tr><th data-i18n="fld.fecha">Fecha</th><th>#Proy</th><th data-i18n="fld.empleado">Empleado</th><th>Hrs</th><th>Tarifa</th><th data-i18n="lbl.total">Total</th><th data-i18n="fld.estado">Estado</th><th data-i18n="fld.notas">Notas</th><th></th></tr></thead><tbody id="tb-n"></tbody><tfoot><tr class="tr"><td colspan="5">TOTAL</td><td id="tf-nt">$0</td><td colspan="3"></td></tr></tfoot></table></div>
   <div class="sl" data-i18n="lbl.por_empleado">Por Empleado</div>
   <div class="tw"><table><thead><tr><th data-i18n="fld.empleado">Empleado</th><th>Total Pagado</th></tr></thead><tbody id="tb-emp"></tbody></table></div>
 </div>
@@ -1004,6 +1008,11 @@ function openProjectDetail(id) {
   PD_CURRENT_NUM = p.num;
   document.getElementById('pd-title').textContent = `#${p.num} — ${p.nombre}`;
   document.getElementById('pd-subtitle').textContent = `${p.cliente||''} · ${fmt(p.valor)}`;
+  // Always start with the edit form closed/reset when opening a project's detail. Without this,
+  // if the edit form was left open (visible) while looking at a different project, it would keep
+  // showing that OTHER project's stale field values here — the header/subtitle would say the
+  // right project, but every input field would silently belong to whatever was open before.
+  document.getElementById('pd-edit-form').style.display = 'none';
   renderProjectDetail();
   document.getElementById('pd-modal').style.display = 'block';
 }
@@ -1024,7 +1033,7 @@ function togglePdEdit() {
   const form = document.getElementById('pd-edit-form');
   const isOpening = form.style.display === 'none';
   if (isOpening) {
-    const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM);
+    const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM && (x.empresa||'BH Pro')===ACTIVE_COMPANY);
     if (!p) return;
     document.getElementById('pd-e-nombre').value = p.nombre || '';
     document.getElementById('pd-e-cliente').value = p.cliente || '';
@@ -1051,7 +1060,7 @@ function togglePdEdit() {
 }
 
 function savePdEdit() {
-  const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM);
+  const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM && (x.empresa||'BH Pro')===ACTIVE_COMPANY);
   if (!p) return;
   const newNombre = document.getElementById('pd-e-nombre').value.trim();
   const newValor = parseFloat(document.getElementById('pd-e-valor').value) || 0;
@@ -1079,10 +1088,11 @@ function savePdEdit() {
 
 function renderProjectDetail() {
   if (!PD_CURRENT_NUM) return;
-  const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM);
+  const p = S.proyectos.find(x=>x.num===PD_CURRENT_NUM && (x.empresa||'BH Pro')===ACTIVE_COMPANY);
   if (!p) return;
-  const gastos = S.gastos.filter(g=>g.proy===PD_CURRENT_NUM);
-  const nomina = S.nomina.filter(n=>n.proy===PD_CURRENT_NUM);
+  const empresaTarget = p.empresa || 'BH Pro';
+  const gastos = S.gastos.filter(g=>g.proy===PD_CURRENT_NUM && (g.empresa ? g.empresa===empresaTarget : !proyectoNumExisteEnOtraEmpresa(PD_CURRENT_NUM, empresaTarget)));
+  const nomina = S.nomina.filter(n=>n.proy===PD_CURRENT_NUM && (n.empresa ? n.empresa===empresaTarget : !proyectoNumExisteEnOtraEmpresa(PD_CURRENT_NUM, empresaTarget)));
   const totG = gastos.reduce((s,g)=>s+g.monto,0);
   const totN = nomina.reduce((s,n)=>s+n.total,0);
   document.getElementById('pd-gastos-tot').textContent = fmt(totG);
@@ -1175,7 +1185,7 @@ async function addGastoToProject() {
   if (fotoInput && fotoInput.files && fotoInput.files[0]) {
     try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
   }
-  S.gastos.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, cat:document.getElementById('pd-g-cat').value, monto:mon, desc:document.getElementById('pd-g-desc').value.trim(), recibo:'', foto });
+  S.gastos.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, cat:document.getElementById('pd-g-cat').value, monto:mon, desc:document.getElementById('pd-g-desc').value.trim(), recibo:'', foto, empresa: ACTIVE_COMPANY });
   saveData();
   ['pd-g-monto','pd-g-desc'].forEach(id=>document.getElementById(id).value='');
   if (fotoInput) fotoInput.value='';
@@ -1187,7 +1197,7 @@ function addNominaToProject() {
   if (!PD_CURRENT_NUM) return;
   const tot = parseFloat(document.getElementById('pd-n-total').value)||0;
   if (!tot) return alert('Ingresa el total');
-  S.nomina.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, empleado:document.getElementById('pd-n-emp').value.trim(), horas:parseFloat(document.getElementById('pd-n-horas').value)||1, tarifa:parseFloat(document.getElementById('pd-n-tarifa').value)||0, total:tot, notas:'' });
+  S.nomina.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, empleado:document.getElementById('pd-n-emp').value.trim(), horas:parseFloat(document.getElementById('pd-n-horas').value)||1, tarifa:parseFloat(document.getElementById('pd-n-tarifa').value)||0, total:tot, notas:'', empresa: ACTIVE_COMPANY });
   saveData();
   ['pd-n-emp','pd-n-tarifa','pd-n-total'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pd-n-horas').value = '1';
@@ -1225,8 +1235,12 @@ function onInvoiceNumChange(force) {
 
 // ===== CALCS =====
 function calcP(p) {
-  const g = S.gastos.filter(x=>x.proy===p.num).reduce((s,x)=>s+x.monto,0);
-  const n = S.nomina.filter(x=>x.proy===p.num).reduce((s,x)=>s+x.total,0);
+  // CRITICAL: gastos/nómina must be matched to the exact project (number + company), never just
+  // the number. BH Pro and Kratos can both have a project numbered e.g. #1002 — filtering by
+  // number alone would silently mix one company's expenses/payroll into the other's profit math.
+  const empresaTarget = p.empresa || 'BH Pro';
+  const g = S.gastos.filter(x=>x.proy===p.num && (x.empresa ? x.empresa===empresaTarget : !proyectoNumExisteEnOtraEmpresa(p.num, empresaTarget))).reduce((s,x)=>s+x.monto,0);
+  const n = S.nomina.filter(x=>x.proy===p.num && (x.empresa ? x.empresa===empresaTarget : !proyectoNumExisteEnOtraEmpresa(p.num, empresaTarget))).reduce((s,x)=>s+x.total,0);
   const gan = p.valor - g - n;
   if ((p.empresa||'BH Pro') === 'Kratos') {
     let pedro;
@@ -1378,6 +1392,13 @@ function previewGastoFoto(input) {
   reader.onload = () => { box.innerHTML = `<img src="${reader.result}" style="max-height:80px;border-radius:6px;">`; };
   reader.readAsDataURL(input.files[0]);
 }
+function previewNominaFoto(input) {
+  const box = document.getElementById('n-foto-preview');
+  if (!input.files || !input.files[0]) { box.innerHTML=''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { box.innerHTML = `<img src="${reader.result}" style="max-height:80px;border-radius:6px;">`; };
+  reader.readAsDataURL(input.files[0]);
+}
 
 function fileToCompressedBase64(file, maxW) {
   return new Promise((resolve, reject) => {
@@ -1429,12 +1450,23 @@ function viewCobroFoto(id){
   const w = window.open('');
   w.document.write(`<img src="${c.foto}" style="max-width:100%;">`);
 }
+function viewNominaFoto(id){
+  const n = S.nomina.find(x=>x.id===id);
+  if(!n||!n.foto) return;
+  const w = window.open('');
+  w.document.write(`<img src="${n.foto}" style="max-width:100%;">`);
+}
 
-function addNomina() {
+async function addNomina() {
   const tot = parseFloat(document.getElementById('n-tot').value)||0;
   if (!tot) return alert('Ingresa el total');
-  S.nomina.push({ id:gid(), fecha:document.getElementById('n-fec').value, proy:document.getElementById('n-pro').value.trim(), empleado:document.getElementById('n-emp').value.trim(), horas:parseFloat(document.getElementById('n-hor').value)||1, tarifa:parseFloat(document.getElementById('n-tar').value)||0, total:tot, notas:document.getElementById('n-not').value.trim() });
-  saveData(); ['n-fec','n-pro','n-emp','n-hor','n-tar','n-tot','n-not'].forEach(id=>document.getElementById(id).value=''); renderAll();
+  const fotoInput = document.getElementById('n-foto');
+  let foto = '';
+  if (fotoInput.files && fotoInput.files[0]) {
+    try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
+  }
+  S.nomina.push({ id:gid(), fecha:document.getElementById('n-fec').value, proy:document.getElementById('n-pro').value.trim(), empleado:document.getElementById('n-emp').value.trim(), horas:parseFloat(document.getElementById('n-hor').value)||1, tarifa:parseFloat(document.getElementById('n-tar').value)||0, total:tot, estado:document.getElementById('n-est').value, foto, notas:document.getElementById('n-not').value.trim(), empresa: ACTIVE_COMPANY });
+  saveData(); ['n-fec','n-pro','n-emp','n-hor','n-tar','n-tot','n-not','n-foto'].forEach(id=>document.getElementById(id).value=''); document.getElementById('n-est').value='Pagado'; document.getElementById('n-emp-balance').textContent=''; document.getElementById('n-foto-preview').innerHTML=''; renderAll();
 }
 async function delN(id){S.nomina=S.nomina.filter(n=>n.id!==id);await deleteServerItem('nomina', id);saveData();renderAll();}
 
@@ -1531,18 +1563,23 @@ function saveEmpleadoEdit() {
   alert('✅ ' + tt('Guardado','Saved'));
 }
 function renderEmpleadoDetailExtras(e) {
-  // Total pagado histórico + historial, calculado igual que el resumen "Por Empleado" (por
+  // Total pagado + pendiente histórico, calculado igual que el resumen "Por Empleado" (por
   // nombre, dentro de los proyectos de la empresa activa) para que el número siempre coincida.
   const proyNums = proyNumsEmpresaActiva();
-  const pagosEmpleado = S.nomina.filter(n => n.empleado === e.nombre && proyNums.has(n.proy));
-  const totalPagado = pagosEmpleado.reduce((s,n)=>s+(n.total||0),0);
+  const pagosEmpleado = S.nomina.filter(n => n.empleado === e.nombre && (n.empresa ? n.empresa===ACTIVE_COMPANY : proyNums.has(n.proy)));
+  const totalPagado = pagosEmpleado.filter(n=>(n.estado||'Pagado')==='Pagado').reduce((s,n)=>s+(n.total||0),0);
+  const totalPendiente = pagosEmpleado.filter(n=>n.estado==='Pendiente').reduce((s,n)=>s+(n.total||0),0);
   document.getElementById('emd-total-pagado').textContent = fmt(totalPagado);
+  const pendienteEl = document.getElementById('emd-total-pendiente');
+  if (pendienteEl) pendienteEl.textContent = fmt(totalPendiente);
   const pagosList = document.getElementById('emd-pagos-list');
-  pagosList.innerHTML = pagosEmpleado.length ? pagosEmpleado.slice().reverse().map(n => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
+  pagosList.innerHTML = pagosEmpleado.length ? pagosEmpleado.slice().reverse().map(n => {
+    const estadoN = n.estado || 'Pagado';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #222;">
       <span>${fd(n.fecha)} — ${n.proy?`<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="closeEmpleadoDetail();openProjectDetailByNum('${n.proy}')">#${n.proy}</span>`:''} ${n.horas||''}${n.horas?'h':''}</span>
-      <span style="color:var(--green);">${fmt(n.total)}</span>
-    </div>`).join('') : `<span style="color:var(--gray);">${tt('Sin pagos registrados aún.','No payments recorded yet.')}</span>`;
+      <span><span style="color:var(--green);">${fmt(n.total)}</span> <span class="badge ${estadoN==='Pagado'?'bp':'bpen'}" style="cursor:pointer;" onclick="toggleNominaEstado('${n.id}');renderEmpleadoDetailExtras(S.empleados.find(x=>x.id===EMD_CURRENT_ID))">${tt(estadoN, estadoN==='Pagado'?'Paid':'Pending')}</span></span>
+    </div>`;
+  }).join('') : `<span style="color:var(--gray);">${tt('Sin pagos registrados aún.','No payments recorded yet.')}</span>`;
   // Documentos: mezcla el w9 legado (si existe, como un documento más) con el arreglo nuevo
   const docs = [];
   if (e.w9) docs.push({ id:'legacy-w9', nombre:'W9', data:e.w9, legacy:true });
@@ -1611,6 +1648,29 @@ function autofillEmpleadoTarifa() {
   if (emp && emp.tarifaHabitual && !tarifaField.value) {
     tarifaField.value = emp.tarifaHabitual;
   }
+  mostrarBalanceEmpleado(nombre, 'n-emp-balance');
+}
+// Shows how much a given employee has already been paid vs. how much is still owed (Pendiente),
+// based on the "estado" of each nómina row logged for them within the active company. Used both
+// in the quick "Registrar Pago" form and in the employee's own ficha, so Brandon always sees this
+// before/after logging a new payment instead of having to go dig for it.
+function balanceEmpleado(nombre) {
+  if (!nombre) return null;
+  const proyNums = proyNumsEmpresaActiva();
+  const nombreNorm = nombre.trim().toLowerCase();
+  const pagos = S.nomina.filter(n => n.empleado && n.empleado.trim().toLowerCase() === nombreNorm && (n.empresa ? n.empresa===ACTIVE_COMPANY : proyNums.has(n.proy)));
+  const pagado = pagos.filter(n => (n.estado||'Pagado') === 'Pagado').reduce((s,n)=>s+(n.total||0),0);
+  const pendiente = pagos.filter(n => n.estado === 'Pendiente').reduce((s,n)=>s+(n.total||0),0);
+  return { pagado, pendiente, count: pagos.length };
+}
+function mostrarBalanceEmpleado(nombre, targetElId) {
+  const box = document.getElementById(targetElId);
+  if (!box) return;
+  const bal = balanceEmpleado(nombre);
+  if (!bal || !bal.count) { box.textContent = ''; return; }
+  box.textContent = bal.pendiente > 0
+    ? `${nombre}: ${tt('ya pagado','already paid')} ${fmt(bal.pagado)} · ${tt('pendiente','owed')} ${fmt(bal.pendiente)}`
+    : `${nombre}: ${tt('ya pagado','already paid')} ${fmt(bal.pagado)} · ${tt('sin pendientes','nothing owed')}`;
 }
 
 function addClienteNuevo() {
@@ -1656,6 +1716,7 @@ function populateClienteDatalist(listId) {
   dl.innerHTML = sorted.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
 function toggleCobro(id){const c=S.cobros.find(c=>c.id===id);if(c){c.estado=c.estado==='Pagado'?'Pendiente':'Pagado';saveData();renderAll();}}
+function toggleNominaEstado(id){const n=S.nomina.find(x=>x.id===id);if(n){n.estado=(n.estado||'Pagado')==='Pagado'?'Pendiente':'Pagado';saveData();renderAll();}}
 async function delC(id){S.cobros=S.cobros.filter(c=>c.id!==id);await deleteServerItem('cobros', id);saveData();renderAll();}
 
 function addAbono() {
@@ -1951,7 +2012,7 @@ async function applyExcelImportPlan(plan) {
 
   let addedN=0;
   plan.nominaToAdd.forEach(item => {
-    S.nomina.push({ id: gid(), ...item });
+    S.nomina.push({ id: gid(), ...item, empresa: ACTIVE_COMPANY });
     addedN++;
   });
 
@@ -2362,7 +2423,7 @@ function applyLocacionToInvoice() {
 }
 
 // ===== I18N =====
-const I18N = {"tab.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "tab.proyectos": {"es": "Proyectos", "en": "Projects"}, "tab.locaciones": {"es": "Locaciones", "en": "Locations"}, "tab.gastos": {"es": "Gastos", "en": "Expenses"}, "tab.nomina": {"es": "Nómina", "en": "Payroll"}, "tab.cobros": {"es": "Cobros", "en": "Collections"}, "tab.facturas": {"es": "Facturas", "en": "Invoices"}, "tab.banco": {"es": "Banco", "en": "Bank"}, "tab.arlene": {"es": "Arlene", "en": "Arlene"}, "tab.mensual": {"es": "Mensual", "en": "Monthly"}, "title.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "title.proyectos": {"es": "Proyectos", "en": "Projects"}, "sub.proyectos": {"es": "Registro y control", "en": "Tracking and control"}, "title.locaciones": {"es": "Locaciones", "en": "Locations"}, "sub.locaciones": {"es": "Proyectos agrupados por edificio/locación", "en": "Projects grouped by building/location"}, "title.gastos": {"es": "Gastos", "en": "Expenses"}, "sub.gastos": {"es": "Materiales, herramientas, renta", "en": "Materials, tools, rent"}, "title.nomina": {"es": "Nómina", "en": "Payroll"}, "sub.nomina": {"es": "Pagos a empleados", "en": "Employee payments"}, "title.cobros": {"es": "Cobros", "en": "Collections"}, "sub.cobros": {"es": "Facturas y pagos del hotel", "en": "Invoices and payments"}, "title.facturacion": {"es": "Facturación", "en": "Invoicing"}, "sub.facturacion": {"es": "Generar y enviar facturas", "en": "Generate and send invoices"}, "title.banco": {"es": "Banco", "en": "Bank"}, "sub.banco": {"es": "Bank of America · Conectado via Plaid", "en": "Bank of America · Connected via Plaid"}, "title.arlene": {"es": "Cuenta de Arlene", "en": "Arlene's Account"}, "sub.arlene": {"es": "Control de pagos y saldo", "en": "Payment and balance tracking"}, "title.mensual": {"es": "Resumen Mensual", "en": "Monthly Summary"}, "sub.mensual": {"es": "Por mes automático", "en": "Automatic monthly"}, "lbl.ya_cobrado": {"es": "Ya Cobrado", "en": "Collected"}, "lbl.por_cobrar": {"es": "Por Cobrar", "en": "Outstanding"}, "lbl.gastosn_mina": {"es": "Gastos+Nómina", "en": "Expenses+Payroll"}, "lbl.ganancia_bruta": {"es": "Ganancia Bruta", "en": "Gross Profit"}, "lbl.tu_parte_55": {"es": "Tu Parte 50%", "en": "Your Share 50%"}, "lbl.arlene_45": {"es": "Arlene 50%", "en": "Arlene 50%"}, "lbl.falta_arlene": {"es": "Falta Arlene", "en": "Owed to Arlene"}, "lbl.arlene": {"es": "Arlene", "en": "Arlene"}, "lbl.le_toca": {"es": "Le Toca", "en": "Owed"}, "lbl.pagado": {"es": "Pagado", "en": "Paid"}, "lbl.falta": {"es": "Falta", "en": "Remaining"}, "lbl.proyectos": {"es": "Proyectos", "en": "Projects"}, "lbl.total": {"es": "Total", "en": "Total"}, "lbl.completados": {"es": "Completados", "en": "Completed"}, "lbl.activos": {"es": "Activos", "en": "Active"}, "lbl.pendientes": {"es": "Pendientes", "en": "Pending"}, "lbl.lista_de_proyectos": {"es": "Lista de Proyectos", "en": "Project List"}, "lbl.registro": {"es": "Registro", "en": "Log"}, "lbl.registro_de_n_mina": {"es": "Registro de Nómina", "en": "Payroll Log"}, "lbl.por_empleado": {"es": "Por Empleado", "en": "By Employee"}, "lbl.cobrado": {"es": "Cobrado", "en": "Collected"}, "lbl.pendiente": {"es": "Pendiente", "en": "Pending"}, "lbl.total_facturado": {"es": "Total Facturado", "en": "Total Invoiced"}, "lbl.facturas_guardadas": {"es": "Facturas Guardadas", "en": "Saved Invoices"}, "lbl.transacciones_recientes": {"es": "Transacciones Recientes", "en": "Recent Transactions"}, "lbl.le_toca_45": {"es": "Le Toca (50%)", "en": "Owed (50%)"}, "lbl.ya_pagado": {"es": "Ya Pagado", "en": "Already Paid"}, "lbl.falta_pagar": {"es": "Falta Pagar", "en": "Still Owed"}, "lbl.historial": {"es": "Historial", "en": "History"}, "lbl.reporte_anual": {"es": "Reporte Anual", "en": "Annual Report"}, "lbl.pct_pagado": {"es": "% Pagado", "en": "% Paid"}, "fld.proyecto": {"es": "# Proyecto", "en": "Project #"}, "fld.cliente": {"es": "Cliente", "en": "Client"}, "fld.nombre_del_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.locacion": {"es": "Locación", "en": "Location"}, "fld.comision_pedro": {"es": "% Comisión Pedro", "en": "% Pedro Commission"}, "fld.fecha_inicio": {"es": "Fecha Inicio", "en": "Start Date"}, "fld.fecha_fin": {"es": "Fecha Fin", "en": "End Date"}, "fld.valor_cotizado": {"es": "Valor Cotizado $", "en": "Quoted Value $"}, "fld.estado": {"es": "Estado", "en": "Status"}, "fld.notas": {"es": "Notas", "en": "Notes"}, "fld.fecha": {"es": "Fecha", "en": "Date"}, "fld.categoria": {"es": "Categoría", "en": "Category"}, "fld.monto": {"es": "Monto $", "en": "Amount $"}, "fld.descripcion": {"es": "Descripción", "en": "Description"}, "fld.recibo": {"es": "Recibo", "en": "Receipt"}, "fld.foto_del_recibogasto_opcional": {"es": "Foto del recibo/gasto (opcional)", "en": "Receipt/expense photo (optional)"}, "fld.empleado": {"es": "Empleado", "en": "Employee"}, "fld.total_pagado": {"es": "Total Pagado $", "en": "Total Paid $"}, "fld.horasdias": {"es": "Horas/Días", "en": "Hours/Days"}, "fld.tarifa": {"es": "Tarifa $", "en": "Rate $"}, "fld.facturaproyecto": {"es": "# Factura/Proyecto", "en": "Invoice/Project #"}, "fld.tipo_pago": {"es": "Tipo Pago", "en": "Payment Type"}, "fld.chequewire": {"es": "# Cheque/Wire", "en": "# Check/Wire"}, "fld.fecha_pago": {"es": "Fecha Pago", "en": "Payment Date"}, "fld.factura": {"es": "# Factura", "en": "Invoice #"}, "fld.bill_to": {"es": "Bill To", "en": "Bill To"}, "fld.nota_opcional": {"es": "Nota (opcional)", "en": "Note (optional)"}, "fld.para_email": {"es": "Para (email)", "en": "To (email)"}, "fld.cc_opcional": {"es": "CC (opcional)", "en": "CC (optional)"}, "fld.asunto": {"es": "Asunto", "en": "Subject"}, "fld.mensaje": {"es": "Mensaje", "en": "Message"}, "ct.agregar_proyecto": {"es": "Agregar Proyecto", "en": "Add Project"}, "ct.registrar_gasto": {"es": "Registrar Gasto", "en": "Log Expense"}, "ct.registrar_pago": {"es": "Registrar Pago", "en": "Log Payroll"}, "ct.registrar_factura": {"es": "Registrar Factura", "en": "Save Invoice"}, "ct.nueva_factura": {"es": "Nueva Factura", "en": "New Invoice"}, "ct.acceso_de_arlene_a_la_app": {"es": "Acceso de Arlene a la app", "en": "Arlene's Access to the App"}, "ct.registrar_abono": {"es": "Registrar Abono", "en": "Log Payment"}, "ct.reporte_para_taxes_contador": {"es": "Reporte para Taxes / Contador", "en": "Report for Taxes / Accountant"}, "btn.cancelar": {"es": "Cancelar", "en": "Cancel"}, "btn.cargando": {"es": "Cargando...", "en": "Loading..."}, "btn.conectar_bofa": {"es": "Conectar Bank of America", "en": "Connect Bank of America"}, "btn.enter": {"es": "Enter", "en": "Enter"}, "btn.enviar_email": {"es": "✉ Enviar por Email", "en": "✉ Send by Email"}, "btn.descargar_pdf": {"es": "⬇ Descargar PDF", "en": "⬇ Download PDF"}, "btn.exportar_excel": {"es": "⬇ Exportar a Excel", "en": "⬇ Export to Excel"}, "btn.guardar": {"es": "💾 Guardar", "en": "💾 Save"}, "btn.enviar": {"es": "📨 Enviar", "en": "📨 Send"}, "btn.agregar_item": {"es": "+ Agregar Ítem", "en": "+ Add Item"}, "btn.registrar_abono": {"es": "+ Registrar Abono", "en": "+ Log Payment"}, "btn.registrar_gasto": {"es": "+ Registrar Gasto", "en": "+ Log Expense"}, "btn.registrar_pago": {"es": "+ Registrar Pago", "en": "+ Log Payroll"}, "btn.registrar": {"es": "+ Registrar", "en": "+ Save"}, "ct.cuenta_arlene": {"es": "💜 Cuenta de Arlene", "en": "💜 Arlene's Account"}, "th.nombre": {"es": "Nombre", "en": "Name"}, "th.valor": {"es": "Valor", "en": "Value"}, "th.ganancia": {"es": "Ganancia", "en": "Profit"}, "th.cerrado": {"es": "Cerrado", "en": "Closed"}, "th.factura": {"es": "Factura", "en": "Invoice"}, "th.monto": {"es": "Monto", "en": "Amount"}, "th.tipo": {"es": "Tipo", "en": "Type"}, "th.cheque": {"es": "#Cheque", "en": "#Check"}, "ct.gastos_tot": {"es": "Gastos", "en": "Expenses"}, "ct.nomina_tot": {"es": "Nómina", "en": "Payroll"}, "ct.ganancia_pd": {"es": "Ganancia", "en": "Profit"}, "sl.agregar_gasto": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "sl.agregar_nomina": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "btn.agregar_gasto_pd": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "btn.agregar_nomina_pd": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "chat.greeting": {"es": "Hola! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?", "en": "Hi! I'm your BH Pro Services assistant. I can analyze your numbers, calculate profits, or answer any question about the business. How can I help?"}, "btn.agregar_proyecto_submit": {"es": "+ Agregar Proyecto", "en": "+ Add Project"}, "btn.reemplazar_datos": {"es": "⚠️ Reemplazar todo con los datos horneados", "en": "⚠️ Replace everything with the baked-in data"}, "ct.importar_excel": {"es": "📥 Importar/Actualizar desde Excel", "en": "📥 Import/Update from Excel"}, "ct.datos_referencia": {"es": "📦 Datos de referencia (11 ago 2026)", "en": "📦 Reference data (Aug 11, 2026)"}, "p.excel_import_desc": {"es": "Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.", "en": "Upload your projects Excel file. Recognized columns: num, nombre, cliente, valor, estado, notas, loc (case and order don't matter). If the project # already exists, it updates; if not, it's added."}, "p.datos_referencia_desc": {"es": "La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.", "en": "The app has your 121 projects, 49 expenses, 254 payroll records, 121 collections, and 7 payments to Arlene baked in (from the Excel you uploaded). Since your server already has saved data, they don't load on their own — use this button to replace EVERYTHING currently there with that reference data."}, "opt.activo": {"es": "Activo", "en": "Active"}, "opt.completado": {"es": "Completado", "en": "Completed"}, "opt.pendiente": {"es": "Pendiente", "en": "Pending"}, "fld.items_factura": {"es": "Ítems de la factura", "en": "Invoice items"}, "fld.nombre_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.ubicacion": {"es": "Ubicación", "en": "Location"}, "btn.guardar_cambios": {"es": "💾 Guardar Cambios", "en": "💾 Save Changes"}, "ct.direcciones_guardadas": {"es": "📍 Direcciones de Facturación Guardadas", "en": "📍 Saved Billing Addresses"}, "p.direcciones_desc": {"es": "Guarda aquí clientes/locaciones que facturas seguido. Luego, al hacer una factura nueva, solo eliges cuál y se llena solo.", "en": "Save clients/locations you invoice often here. Then, when making a new invoice, just pick one and it fills in automatically."}, "fld.nombre_cliente_loc": {"es": "Nombre (cliente / edificio)", "en": "Name (client / building)"}, "fld.telefono": {"es": "Teléfono", "en": "Phone"}, "fld.direccion": {"es": "Dirección", "en": "Address"}, "btn.guardar_direccion": {"es": "+ Guardar Dirección", "en": "+ Save Address"}, "fld.usar_direccion_guardada": {"es": "Usar dirección guardada (opcional)", "en": "Use saved address (optional)"}, "ct.scope_of_work": {"es": "Alcance del Trabajo", "en": "Scope of Work"}, "btn.guardar_y_cerrar": {"es": "💾 Guardar y Cerrar", "en": "💾 Save and Close"}, "btn.abrir_mail": {"es": "Abrir en Mail", "en": "Open in Mail"}, "btn.abrir_gmail": {"es": "Abrir en Gmail", "en": "Open in Gmail"}, "ct.empleados": {"es": "👷 Empleados", "en": "👷 Employees"}, "p.empleados_desc": {"es": "Guarda aquí la información de cada empleado (incluyendo su W9). Luego, al registrar un pago, solo escribes su nombre y se autocompleta.", "en": "Save each employee's info here (including their W9). Then, when logging a payment, just type their name and it autofills."}, "fld.nombre_empleado": {"es": "Nombre", "en": "Name"}, "fld.email": {"es": "Correo", "en": "Email"}, "fld.tarifa_habitual": {"es": "Tarifa habitual $", "en": "Usual rate $"}, "fld.foto_w9": {"es": "Foto/escaneo del W9 (opcional)", "en": "Photo/scan of W9 (optional)"}, "btn.guardar_empleado": {"es": "+ Guardar Empleado", "en": "+ Save Employee"}, "ct.respaldos_auto": {"es": "🛟 Respaldos Automáticos", "en": "🛟 Automatic Backups"}, "p.respaldos_desc": {"es": "La app guarda una copia de seguridad automática cada pocos minutos. Si algo se pierde, puedes restaurar la copia más reciente aquí en vez de perder todo hasta agosto.", "en": "The app automatically saves a backup every few minutes. If something is lost, you can restore the most recent copy here instead of losing everything back to August."}, "btn.ver_respaldos": {"es": "🔄 Ver Respaldos Disponibles", "en": "🔄 View Available Backups"}, "ct.debug_asistente": {"es": "🐛 Diagnóstico del Asistente IA", "en": "🐛 AI Assistant Diagnostics"}, "p.debug_desc": {"es": "Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.", "en": "If the assistant fails or doesn't respond well, tap this button to see the technical detail of the last few times it was used — so I can review exactly what happened."}, "btn.ver_diagnostico": {"es": "🔍 Ver Registro Técnico", "en": "🔍 View Technical Log"}, "ct.historial_cambios": {"es": "📋 Historial de Cambios", "en": "📋 Change History"}, "p.historial_desc": {"es": "Registro de quién agregó, editó o eliminó algo (Brandon o Arlene), con fecha y hora.", "en": "Log of who added, edited, or deleted something (Brandon or Arlene), with date and time."}, "btn.ver_historial": {"es": "📋 Ver Historial", "en": "📋 View History"}, "ct.cobros_vencidos": {"es": "Cobros Vencidos", "en": "Overdue Collections"}, "p.cobros_vencidos_desc": {"es": "Estos cobros llevan pendientes más tiempo del normal. Revísalos cuando puedas.", "en": "These collections have been pending longer than usual. Review them when you can."}, "btn.omitir_hoy": {"es": "Omitir por hoy", "en": "Dismiss for today"}, "btn.cerrar": {"es": "Cerrar", "en": "Close"}, "ph.opcional": {"es": "Opcional", "en": "Optional"}, "ph.buscar_proyecto": {"es": "Buscar proyecto...", "en": "Search project..."}, "ph.scope_desc": {"es": "Describe aquí todo el alcance del trabajo con el detalle que necesites...", "en": "Describe the full scope of work here with as much detail as you need..."}, "ph.desc_gasto": {"es": "Pintura, cinta...", "en": "Paint, tape..."}, "ph.doc_nombre": {"es": "W9, licencia, ID...", "en": "W9, license, ID..."}, "ph.buscar_gasto": {"es": "Buscar por proyecto, categoría...", "en": "Search by project, category..."}, "ph.notas_especialidad": {"es": "Especialidad, disponibilidad, etc.", "en": "Specialty, availability, etc."}, "ph.buscar_empleado": {"es": "Buscar empleado o proyecto...", "en": "Search employee or project..."}, "ph.buscar_cobro": {"es": "Buscar factura, estado, cheque...", "en": "Search invoice, status, check..."}, "ph.nota_pie_factura": {"es": "Nota al pie de la factura", "en": "Note at the bottom of the invoice"}, "ph.tipo_pago_ejemplo": {"es": "Zelle, cash...", "en": "Zelle, cash..."}, "fld.nombre_documento": {"es": "Nombre del documento", "en": "Document name"}, "lbl.total_pagado_historico": {"es": "Total Pagado (histórico)", "en": "Total Paid (historical)"}, "ct.documentos": {"es": "📎 Documentos", "en": "📎 Documents"}, "btn.agregar_documento": {"es": "+ Agregar Documento", "en": "+ Add Document"}, "ct.historial_pagos_emp": {"es": "🧾 Historial de Pagos", "en": "🧾 Payment History"}, "fld.tipo_comision_pedro": {"es": "Tipo de Comisión Pedro", "en": "Pedro Commission Type"}, "opt.pct_ganancia": {"es": "% Porcentaje de ganancia", "en": "% Profit percentage"}, "opt.valor_fijo": {"es": "Valor Fijo $", "en": "Fixed Value $"}, "fld.valor_fijo_pedro": {"es": "Valor Fijo Pedro $", "en": "Pedro Fixed Value $"}, "ct.diag_persistencia": {"es": "💾 Diagnóstico de Persistencia (Disco)", "en": "💾 Persistence Diagnostics (Disk)"}, "btn.verificar_persistencia": {"es": "🔍 Verificar Persistencia", "en": "🔍 Check Persistence"}, "ct.cobros_duplicados": {"es": "🔍 Cobros Duplicados", "en": "🔍 Duplicate Collections"}, "btn.buscar_duplicados": {"es": "🔍 Buscar Duplicados", "en": "🔍 Find Duplicates"}, "lbl.ordenar_por": {"es": "Ordenar por", "en": "Sort by"}, "lbl.direccion_orden": {"es": "Dirección", "en": "Direction"}, "opt.mayor_menor": {"es": "Mayor a menor", "en": "Highest to lowest"}, "opt.menor_mayor": {"es": "Menor a mayor", "en": "Lowest to highest"}, "opt.mayor_menor_reciente": {"es": "Mayor a menor / Más reciente", "en": "Highest to lowest / Most recent"}, "opt.menor_mayor_antiguo": {"es": "Menor a mayor / Más antiguo", "en": "Lowest to highest / Oldest"}, "lbl.filtrar_estado": {"es": "Filtrar Estado", "en": "Filter Status"}, "lbl.filtrar_pago": {"es": "Filtrar Pago", "en": "Filter Payment"}, "opt.todos": {"es": "Todos", "en": "All"}, "opt.no_pagado": {"es": "No pagado", "en": "Not paid"}, "ct.anadir_cliente": {"es": "➕ Añadir Cliente Nuevo", "en": "➕ Add New Client"}, "fld.nombre_del_cliente": {"es": "Nombre del Cliente", "en": "Client Name"}, "fld.ubicacion_edificio_opc": {"es": "Ubicación/Edificio (opcional)", "en": "Location/Building (optional)"}, "btn.guardar_cliente_nuevo": {"es": "➕ Guardar Cliente", "en": "➕ Save Client"}, "th.cheque_wire": {"es": "#Cheque/Wire", "en": "#Check/Wire"}};
+const I18N = {"tab.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "tab.proyectos": {"es": "Proyectos", "en": "Projects"}, "tab.locaciones": {"es": "Locaciones", "en": "Locations"}, "tab.gastos": {"es": "Gastos", "en": "Expenses"}, "tab.nomina": {"es": "Nómina", "en": "Payroll"}, "tab.cobros": {"es": "Cobros", "en": "Collections"}, "tab.facturas": {"es": "Facturas", "en": "Invoices"}, "tab.banco": {"es": "Banco", "en": "Bank"}, "tab.arlene": {"es": "Arlene", "en": "Arlene"}, "tab.mensual": {"es": "Mensual", "en": "Monthly"}, "title.dashboard": {"es": "Dashboard", "en": "Dashboard"}, "title.proyectos": {"es": "Proyectos", "en": "Projects"}, "sub.proyectos": {"es": "Registro y control", "en": "Tracking and control"}, "title.locaciones": {"es": "Locaciones", "en": "Locations"}, "sub.locaciones": {"es": "Proyectos agrupados por edificio/locación", "en": "Projects grouped by building/location"}, "title.gastos": {"es": "Gastos", "en": "Expenses"}, "sub.gastos": {"es": "Materiales, herramientas, renta", "en": "Materials, tools, rent"}, "title.nomina": {"es": "Nómina", "en": "Payroll"}, "sub.nomina": {"es": "Pagos a empleados", "en": "Employee payments"}, "title.cobros": {"es": "Cobros", "en": "Collections"}, "sub.cobros": {"es": "Facturas y pagos del hotel", "en": "Invoices and payments"}, "title.facturacion": {"es": "Facturación", "en": "Invoicing"}, "sub.facturacion": {"es": "Generar y enviar facturas", "en": "Generate and send invoices"}, "title.banco": {"es": "Banco", "en": "Bank"}, "sub.banco": {"es": "Bank of America · Conectado via Plaid", "en": "Bank of America · Connected via Plaid"}, "title.arlene": {"es": "Cuenta de Arlene", "en": "Arlene's Account"}, "sub.arlene": {"es": "Control de pagos y saldo", "en": "Payment and balance tracking"}, "title.mensual": {"es": "Resumen Mensual", "en": "Monthly Summary"}, "sub.mensual": {"es": "Por mes automático", "en": "Automatic monthly"}, "lbl.ya_cobrado": {"es": "Ya Cobrado", "en": "Collected"}, "lbl.por_cobrar": {"es": "Por Cobrar", "en": "Outstanding"}, "lbl.gastosn_mina": {"es": "Gastos+Nómina", "en": "Expenses+Payroll"}, "lbl.ganancia_bruta": {"es": "Ganancia Bruta", "en": "Gross Profit"}, "lbl.tu_parte_55": {"es": "Tu Parte 50%", "en": "Your Share 50%"}, "lbl.arlene_45": {"es": "Arlene 50%", "en": "Arlene 50%"}, "lbl.falta_arlene": {"es": "Falta Arlene", "en": "Owed to Arlene"}, "lbl.arlene": {"es": "Arlene", "en": "Arlene"}, "lbl.le_toca": {"es": "Le Toca", "en": "Owed"}, "lbl.pagado": {"es": "Pagado", "en": "Paid"}, "lbl.falta": {"es": "Falta", "en": "Remaining"}, "lbl.proyectos": {"es": "Proyectos", "en": "Projects"}, "lbl.total": {"es": "Total", "en": "Total"}, "lbl.completados": {"es": "Completados", "en": "Completed"}, "lbl.activos": {"es": "Activos", "en": "Active"}, "lbl.pendientes": {"es": "Pendientes", "en": "Pending"}, "lbl.lista_de_proyectos": {"es": "Lista de Proyectos", "en": "Project List"}, "lbl.registro": {"es": "Registro", "en": "Log"}, "lbl.registro_de_n_mina": {"es": "Registro de Nómina", "en": "Payroll Log"}, "lbl.por_empleado": {"es": "Por Empleado", "en": "By Employee"}, "lbl.cobrado": {"es": "Cobrado", "en": "Collected"}, "lbl.pendiente": {"es": "Pendiente", "en": "Pending"}, "lbl.total_facturado": {"es": "Total Facturado", "en": "Total Invoiced"}, "lbl.facturas_guardadas": {"es": "Facturas Guardadas", "en": "Saved Invoices"}, "lbl.transacciones_recientes": {"es": "Transacciones Recientes", "en": "Recent Transactions"}, "lbl.le_toca_45": {"es": "Le Toca (50%)", "en": "Owed (50%)"}, "lbl.ya_pagado": {"es": "Ya Pagado", "en": "Already Paid"}, "lbl.falta_pagar": {"es": "Falta Pagar", "en": "Still Owed"}, "lbl.historial": {"es": "Historial", "en": "History"}, "lbl.reporte_anual": {"es": "Reporte Anual", "en": "Annual Report"}, "lbl.pct_pagado": {"es": "% Pagado", "en": "% Paid"}, "fld.proyecto": {"es": "# Proyecto", "en": "Project #"}, "fld.cliente": {"es": "Cliente", "en": "Client"}, "fld.nombre_del_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.locacion": {"es": "Locación", "en": "Location"}, "fld.comision_pedro": {"es": "% Comisión Pedro", "en": "% Pedro Commission"}, "fld.fecha_inicio": {"es": "Fecha Inicio", "en": "Start Date"}, "fld.fecha_fin": {"es": "Fecha Fin", "en": "End Date"}, "fld.valor_cotizado": {"es": "Valor Cotizado $", "en": "Quoted Value $"}, "fld.estado": {"es": "Estado", "en": "Status"}, "fld.notas": {"es": "Notas", "en": "Notes"}, "fld.fecha": {"es": "Fecha", "en": "Date"}, "fld.categoria": {"es": "Categoría", "en": "Category"}, "fld.monto": {"es": "Monto $", "en": "Amount $"}, "fld.descripcion": {"es": "Descripción", "en": "Description"}, "fld.recibo": {"es": "Recibo", "en": "Receipt"}, "fld.foto_del_recibogasto_opcional": {"es": "Foto del recibo/gasto (opcional)", "en": "Receipt/expense photo (optional)"}, "fld.empleado": {"es": "Empleado", "en": "Employee"}, "fld.total_pagado": {"es": "Total Pagado $", "en": "Total Paid $"}, "fld.horasdias": {"es": "Horas/Días", "en": "Hours/Days"}, "fld.tarifa": {"es": "Tarifa $", "en": "Rate $"}, "fld.facturaproyecto": {"es": "# Factura/Proyecto", "en": "Invoice/Project #"}, "fld.tipo_pago": {"es": "Tipo Pago", "en": "Payment Type"}, "fld.chequewire": {"es": "# Cheque/Wire", "en": "# Check/Wire"}, "fld.fecha_pago": {"es": "Fecha Pago", "en": "Payment Date"}, "fld.factura": {"es": "# Factura", "en": "Invoice #"}, "fld.bill_to": {"es": "Bill To", "en": "Bill To"}, "fld.nota_opcional": {"es": "Nota (opcional)", "en": "Note (optional)"}, "fld.para_email": {"es": "Para (email)", "en": "To (email)"}, "fld.cc_opcional": {"es": "CC (opcional)", "en": "CC (optional)"}, "fld.asunto": {"es": "Asunto", "en": "Subject"}, "fld.mensaje": {"es": "Mensaje", "en": "Message"}, "ct.agregar_proyecto": {"es": "Agregar Proyecto", "en": "Add Project"}, "ct.registrar_gasto": {"es": "Registrar Gasto", "en": "Log Expense"}, "ct.registrar_pago": {"es": "Registrar Pago", "en": "Log Payroll"}, "ct.registrar_factura": {"es": "Registrar Factura", "en": "Save Invoice"}, "ct.nueva_factura": {"es": "Nueva Factura", "en": "New Invoice"}, "ct.acceso_de_arlene_a_la_app": {"es": "Acceso de Arlene a la app", "en": "Arlene's Access to the App"}, "ct.registrar_abono": {"es": "Registrar Abono", "en": "Log Payment"}, "ct.reporte_para_taxes_contador": {"es": "Reporte para Taxes / Contador", "en": "Report for Taxes / Accountant"}, "btn.cancelar": {"es": "Cancelar", "en": "Cancel"}, "btn.cargando": {"es": "Cargando...", "en": "Loading..."}, "btn.conectar_bofa": {"es": "Conectar Bank of America", "en": "Connect Bank of America"}, "btn.enter": {"es": "Enter", "en": "Enter"}, "btn.enviar_email": {"es": "✉ Enviar por Email", "en": "✉ Send by Email"}, "btn.descargar_pdf": {"es": "⬇ Descargar PDF", "en": "⬇ Download PDF"}, "btn.exportar_excel": {"es": "⬇ Exportar a Excel", "en": "⬇ Export to Excel"}, "btn.guardar": {"es": "💾 Guardar", "en": "💾 Save"}, "btn.enviar": {"es": "📨 Enviar", "en": "📨 Send"}, "btn.agregar_item": {"es": "+ Agregar Ítem", "en": "+ Add Item"}, "btn.registrar_abono": {"es": "+ Registrar Abono", "en": "+ Log Payment"}, "btn.registrar_gasto": {"es": "+ Registrar Gasto", "en": "+ Log Expense"}, "btn.registrar_pago": {"es": "+ Registrar Pago", "en": "+ Log Payroll"}, "btn.registrar": {"es": "+ Registrar", "en": "+ Save"}, "ct.cuenta_arlene": {"es": "💜 Cuenta de Arlene", "en": "💜 Arlene's Account"}, "th.nombre": {"es": "Nombre", "en": "Name"}, "th.valor": {"es": "Valor", "en": "Value"}, "th.ganancia": {"es": "Ganancia", "en": "Profit"}, "th.cerrado": {"es": "Cerrado", "en": "Closed"}, "th.factura": {"es": "Factura", "en": "Invoice"}, "th.monto": {"es": "Monto", "en": "Amount"}, "th.tipo": {"es": "Tipo", "en": "Type"}, "th.cheque": {"es": "#Cheque", "en": "#Check"}, "ct.gastos_tot": {"es": "Gastos", "en": "Expenses"}, "ct.nomina_tot": {"es": "Nómina", "en": "Payroll"}, "ct.ganancia_pd": {"es": "Ganancia", "en": "Profit"}, "sl.agregar_gasto": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "sl.agregar_nomina": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "btn.agregar_gasto_pd": {"es": "+ Agregar Gasto", "en": "+ Add Expense"}, "btn.agregar_nomina_pd": {"es": "+ Agregar Nómina", "en": "+ Add Payroll"}, "chat.greeting": {"es": "Hola! Soy tu asistente de BH Pro Services. Puedo analizar tus números, calcular ganancias o responder cualquier pregunta sobre el negocio. ¿En qué te ayudo?", "en": "Hi! I'm your BH Pro Services assistant. I can analyze your numbers, calculate profits, or answer any question about the business. How can I help?"}, "btn.agregar_proyecto_submit": {"es": "+ Agregar Proyecto", "en": "+ Add Project"}, "btn.reemplazar_datos": {"es": "⚠️ Reemplazar todo con los datos horneados", "en": "⚠️ Replace everything with the baked-in data"}, "ct.importar_excel": {"es": "📥 Importar/Actualizar desde Excel", "en": "📥 Import/Update from Excel"}, "ct.datos_referencia": {"es": "📦 Datos de referencia (11 ago 2026)", "en": "📦 Reference data (Aug 11, 2026)"}, "p.excel_import_desc": {"es": "Sube tu Excel de proyectos. Columnas reconocidas: num, nombre, cliente, valor, estado, notas, loc (no importa mayúsculas ni orden). Si el # de proyecto ya existe, se actualiza; si no, se agrega.", "en": "Upload your projects Excel file. Recognized columns: num, nombre, cliente, valor, estado, notas, loc (case and order don't matter). If the project # already exists, it updates; if not, it's added."}, "p.datos_referencia_desc": {"es": "La app trae horneados tus 121 proyectos, 49 gastos, 254 registros de nómina, 121 cobros y 7 abonos a Arlene (del Excel que subiste). Como tu servidor ya tiene datos guardados, no se cargan solos — usa este botón para reemplazar TODO lo que hay ahora mismo por esos datos de referencia.", "en": "The app has your 121 projects, 49 expenses, 254 payroll records, 121 collections, and 7 payments to Arlene baked in (from the Excel you uploaded). Since your server already has saved data, they don't load on their own — use this button to replace EVERYTHING currently there with that reference data."}, "opt.activo": {"es": "Activo", "en": "Active"}, "opt.completado": {"es": "Completado", "en": "Completed"}, "opt.pendiente": {"es": "Pendiente", "en": "Pending"}, "fld.items_factura": {"es": "Ítems de la factura", "en": "Invoice items"}, "fld.nombre_proyecto": {"es": "Nombre del Proyecto", "en": "Project Name"}, "fld.ubicacion": {"es": "Ubicación", "en": "Location"}, "btn.guardar_cambios": {"es": "💾 Guardar Cambios", "en": "💾 Save Changes"}, "ct.direcciones_guardadas": {"es": "📍 Direcciones de Facturación Guardadas", "en": "📍 Saved Billing Addresses"}, "p.direcciones_desc": {"es": "Guarda aquí clientes/locaciones que facturas seguido. Luego, al hacer una factura nueva, solo eliges cuál y se llena solo.", "en": "Save clients/locations you invoice often here. Then, when making a new invoice, just pick one and it fills in automatically."}, "fld.nombre_cliente_loc": {"es": "Nombre (cliente / edificio)", "en": "Name (client / building)"}, "fld.telefono": {"es": "Teléfono", "en": "Phone"}, "fld.direccion": {"es": "Dirección", "en": "Address"}, "btn.guardar_direccion": {"es": "+ Guardar Dirección", "en": "+ Save Address"}, "fld.usar_direccion_guardada": {"es": "Usar dirección guardada (opcional)", "en": "Use saved address (optional)"}, "ct.scope_of_work": {"es": "Alcance del Trabajo", "en": "Scope of Work"}, "btn.guardar_y_cerrar": {"es": "💾 Guardar y Cerrar", "en": "💾 Save and Close"}, "btn.abrir_mail": {"es": "Abrir en Mail", "en": "Open in Mail"}, "btn.abrir_gmail": {"es": "Abrir en Gmail", "en": "Open in Gmail"}, "ct.empleados": {"es": "👷 Empleados", "en": "👷 Employees"}, "p.empleados_desc": {"es": "Guarda aquí la información de cada empleado (incluyendo su W9). Luego, al registrar un pago, solo escribes su nombre y se autocompleta.", "en": "Save each employee's info here (including their W9). Then, when logging a payment, just type their name and it autofills."}, "fld.nombre_empleado": {"es": "Nombre", "en": "Name"}, "fld.email": {"es": "Correo", "en": "Email"}, "fld.tarifa_habitual": {"es": "Tarifa habitual $", "en": "Usual rate $"}, "fld.foto_w9": {"es": "Foto/escaneo del W9 (opcional)", "en": "Photo/scan of W9 (optional)"}, "btn.guardar_empleado": {"es": "+ Guardar Empleado", "en": "+ Save Employee"}, "ct.respaldos_auto": {"es": "🛟 Respaldos Automáticos", "en": "🛟 Automatic Backups"}, "p.respaldos_desc": {"es": "La app guarda una copia de seguridad automática cada pocos minutos. Si algo se pierde, puedes restaurar la copia más reciente aquí en vez de perder todo hasta agosto.", "en": "The app automatically saves a backup every few minutes. If something is lost, you can restore the most recent copy here instead of losing everything back to August."}, "btn.ver_respaldos": {"es": "🔄 Ver Respaldos Disponibles", "en": "🔄 View Available Backups"}, "ct.debug_asistente": {"es": "🐛 Diagnóstico del Asistente IA", "en": "🐛 AI Assistant Diagnostics"}, "p.debug_desc": {"es": "Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.", "en": "If the assistant fails or doesn't respond well, tap this button to see the technical detail of the last few times it was used — so I can review exactly what happened."}, "btn.ver_diagnostico": {"es": "🔍 Ver Registro Técnico", "en": "🔍 View Technical Log"}, "ct.historial_cambios": {"es": "📋 Historial de Cambios", "en": "📋 Change History"}, "p.historial_desc": {"es": "Registro de quién agregó, editó o eliminó algo (Brandon o Arlene), con fecha y hora.", "en": "Log of who added, edited, or deleted something (Brandon or Arlene), with date and time."}, "btn.ver_historial": {"es": "📋 Ver Historial", "en": "📋 View History"}, "ct.cobros_vencidos": {"es": "Cobros Vencidos", "en": "Overdue Collections"}, "p.cobros_vencidos_desc": {"es": "Estos cobros llevan pendientes más tiempo del normal. Revísalos cuando puedas.", "en": "These collections have been pending longer than usual. Review them when you can."}, "btn.omitir_hoy": {"es": "Omitir por hoy", "en": "Dismiss for today"}, "btn.cerrar": {"es": "Cerrar", "en": "Close"}, "ph.opcional": {"es": "Opcional", "en": "Optional"}, "ph.buscar_proyecto": {"es": "Buscar proyecto...", "en": "Search project..."}, "ph.scope_desc": {"es": "Describe aquí todo el alcance del trabajo con el detalle que necesites...", "en": "Describe the full scope of work here with as much detail as you need..."}, "ph.desc_gasto": {"es": "Pintura, cinta...", "en": "Paint, tape..."}, "ph.doc_nombre": {"es": "W9, licencia, ID...", "en": "W9, license, ID..."}, "ph.buscar_gasto": {"es": "Buscar por proyecto, categoría...", "en": "Search by project, category..."}, "ph.notas_especialidad": {"es": "Especialidad, disponibilidad, etc.", "en": "Specialty, availability, etc."}, "ph.buscar_empleado": {"es": "Buscar empleado o proyecto...", "en": "Search employee or project..."}, "ph.buscar_cobro": {"es": "Buscar factura, estado, cheque...", "en": "Search invoice, status, check..."}, "ph.nota_pie_factura": {"es": "Nota al pie de la factura", "en": "Note at the bottom of the invoice"}, "ph.tipo_pago_ejemplo": {"es": "Zelle, cash...", "en": "Zelle, cash..."}, "fld.nombre_documento": {"es": "Nombre del documento", "en": "Document name"}, "lbl.total_pagado_historico": {"es": "Total Pagado (histórico)", "en": "Total Paid (historical)"}, "ct.documentos": {"es": "📎 Documentos", "en": "📎 Documents"}, "btn.agregar_documento": {"es": "+ Agregar Documento", "en": "+ Add Document"}, "ct.historial_pagos_emp": {"es": "🧾 Historial de Pagos", "en": "🧾 Payment History"}, "fld.tipo_comision_pedro": {"es": "Tipo de Comisión Pedro", "en": "Pedro Commission Type"}, "opt.pct_ganancia": {"es": "% Porcentaje de ganancia", "en": "% Profit percentage"}, "opt.valor_fijo": {"es": "Valor Fijo $", "en": "Fixed Value $"}, "fld.valor_fijo_pedro": {"es": "Valor Fijo Pedro $", "en": "Pedro Fixed Value $"}, "ct.diag_persistencia": {"es": "💾 Diagnóstico de Persistencia (Disco)", "en": "💾 Persistence Diagnostics (Disk)"}, "btn.verificar_persistencia": {"es": "🔍 Verificar Persistencia", "en": "🔍 Check Persistence"}, "ct.cobros_duplicados": {"es": "🔍 Cobros Duplicados", "en": "🔍 Duplicate Collections"}, "btn.buscar_duplicados": {"es": "🔍 Buscar Duplicados", "en": "🔍 Find Duplicates"}, "lbl.ordenar_por": {"es": "Ordenar por", "en": "Sort by"}, "lbl.direccion_orden": {"es": "Dirección", "en": "Direction"}, "opt.mayor_menor": {"es": "Mayor a menor", "en": "Highest to lowest"}, "opt.menor_mayor": {"es": "Menor a mayor", "en": "Lowest to highest"}, "opt.mayor_menor_reciente": {"es": "Mayor a menor / Más reciente", "en": "Highest to lowest / Most recent"}, "opt.menor_mayor_antiguo": {"es": "Menor a mayor / Más antiguo", "en": "Lowest to highest / Oldest"}, "lbl.filtrar_estado": {"es": "Filtrar Estado", "en": "Filter Status"}, "lbl.filtrar_pago": {"es": "Filtrar Pago", "en": "Filter Payment"}, "opt.todos": {"es": "Todos", "en": "All"}, "opt.no_pagado": {"es": "No pagado", "en": "Not paid"}, "ct.anadir_cliente": {"es": "➕ Añadir Cliente Nuevo", "en": "➕ Add New Client"}, "fld.nombre_del_cliente": {"es": "Nombre del Cliente", "en": "Client Name"}, "fld.ubicacion_edificio_opc": {"es": "Ubicación/Edificio (opcional)", "en": "Location/Building (optional)"}, "btn.guardar_cliente_nuevo": {"es": "➕ Guardar Cliente", "en": "➕ Save Client"}, "th.cheque_wire": {"es": "#Cheque/Wire", "en": "#Check/Wire"}, "lbl.total_pendiente_emp": {"es": "Pendiente por Pagar", "en": "Owed / Pending"}};
 let CURRENT_LANG = 'es';
 function tt(es, en) { return CURRENT_LANG === 'en' ? en : es; }
 
@@ -2670,8 +2731,9 @@ async function loadBankData() {
       } else {
         LAST_BANK_TXS = {};
         const importedGastoIds = new Set(S.gastos.filter(g=>g.plaid_tx_id).map(g=>g.plaid_tx_id));
+        const importedNominaIds = new Set(S.nomina.filter(n=>n.plaid_tx_id).map(n=>n.plaid_tx_id));
         const importedCobroIds = new Set(S.cobros.filter(c=>c.plaid_tx_id).map(c=>c.plaid_tx_id));
-        txDiv.innerHTML = data.transactions.slice(0,60).map(tx => renderTxRow(tx, importedGastoIds, importedCobroIds)).join('');
+        txDiv.innerHTML = data.transactions.slice(0,60).map(tx => renderTxRow(tx, importedGastoIds, importedCobroIds, importedNominaIds)).join('');
       }
     } else {
       document.getElementById('banco-content').style.display = 'block';
@@ -2680,14 +2742,15 @@ async function loadBankData() {
   } catch(e) {}
 }
 
-function renderTxRow(tx, importedGastoIds, importedCobroIds) {
+function renderTxRow(tx, importedGastoIds, importedCobroIds, importedNominaIds) {
   LAST_BANK_TXS[tx.transaction_id] = tx;
   const isDeposit = tx.amount < 0; // Plaid: negative amount = money coming IN
-  const already = isDeposit ? importedCobroIds.has(tx.transaction_id) : importedGastoIds.has(tx.transaction_id);
+  const already = isDeposit ? importedCobroIds.has(tx.transaction_id) : (importedGastoIds.has(tx.transaction_id) || (importedNominaIds && importedNominaIds.has(tx.transaction_id)));
+  const yaEsNomina = !isDeposit && importedNominaIds && importedNominaIds.has(tx.transaction_id);
   const note = LAST_BANK_NOTES[tx.transaction_id] || '';
   const actionHtml = already
-    ? `<span style="color:var(--green);font-size:.65rem;white-space:nowrap;">✓ ${isDeposit?tt('En Cobros','In Collections'):tt('En Gastos','In Expenses')}</span>`
-    : `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:4px 8px;" onclick="toggleTxCategorize('${tx.transaction_id}')">${isDeposit?tt('+ Cobro','+ Payment'):tt('+ Gasto','+ Expense')}</button>`;
+    ? `<span style="color:var(--green);font-size:.65rem;white-space:nowrap;">✓ ${isDeposit?tt('En Cobros','In Collections'):(yaEsNomina?tt('En Nómina','In Payroll'):tt('En Gastos','In Expenses'))}</span>`
+    : `<button class="btn btn-sm btn-outline" style="font-size:.6rem;padding:4px 8px;" onclick="toggleTxCategorize('${tx.transaction_id}')">${isDeposit?tt('+ Cobro','+ Payment'):tt('+ Asignar','+ Assign')}</button>`;
   const noteIndicator = note ? ' 📝' : '';
   return `<div class="tx-item" style="cursor:pointer;" onclick="toggleTxExpand('${tx.transaction_id}')"><div><div class="tx-name">${tx.name}${noteIndicator}</div><div class="tx-date">${tx.date}</div></div><div style="display:flex;align-items:center;gap:8px;"><div class="tx-amt ${tx.amount>0?'neg':'pos'}">${fmt(Math.abs(tx.amount))}</div><div onclick="event.stopPropagation()">${actionHtml}</div></div></div><div id="tx-expand-${tx.transaction_id}"></div><div id="tx-form-${tx.transaction_id}"></div>`;
 }
@@ -2729,9 +2792,9 @@ function toggleTxCategorize(txId) {
   const tx = LAST_BANK_TXS[txId];
   if (!tx) return;
   const isDeposit = tx.amount < 0;
-  const proys = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).slice().reverse();
-  const proyOptions = proys.map(p=>`<option value="${p.num}">${p.num} — ${p.nombre}</option>`).join('');
   if (isDeposit) {
+    const proys = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).slice().reverse();
+    const proyOptions = proys.map(p=>`<option value="${p.num}">${p.num} — ${p.nombre}</option>`).join('');
     formDiv.innerHTML = `
       <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0 10px;">
         <div class="fl" style="font-size:.6rem;">${tt('¿De qué proyecto es este cobro?','Which project is this payment for?')}</div>
@@ -2742,18 +2805,54 @@ function toggleTxCategorize(txId) {
         </div>
       </div>`;
   } else {
-    const categorias = ['Materiales','Herramientas','Renta equipo','Transporte','Storage','Otros'];
-    const catOptions = categorias.map(c=>`<option value="${c}">${c}</option>`).join('');
+    // Outgoing money can be either a business expense OR a payment to an employee — let Brandon
+    // pick which, instead of always assuming it's an expense.
     formDiv.innerHTML = `
       <div style="background:var(--black-3);border:1px solid #2a4d80;border-radius:8px;padding:10px;margin:6px 0 10px;">
-        <div class="fl" style="font-size:.6rem;">${tt('Categoría','Category')}</div>
-        <select id="txcat-${txId}" style="width:100%;margin-bottom:8px;">${catOptions}</select>
-        <div class="fl" style="font-size:.6rem;">${tt('Proyecto','Project')}</div>
-        <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">${tt('Selecciona...','Select...')}</option>${proyOptions}</select>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToGasto('${txId}')">${tt('✓ Guardar como Gasto','✓ Save as Expense')}</button>
-          <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">${tt('Cancelar','Cancel')}</button>
+        <div class="fl" style="font-size:.6rem;margin-bottom:6px;">${tt('¿Qué es esta transacción?','What is this transaction?')}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="btn btn-sm" id="txtipo-gasto-${txId}" style="flex:1;" onclick="setTxTipo('${txId}','gasto')">💸 ${tt('Gasto','Expense')}</button>
+          <button class="btn btn-sm btn-outline" id="txtipo-nomina-${txId}" style="flex:1;" onclick="setTxTipo('${txId}','nomina')">👷 ${tt('Pago a Empleado','Employee Payment')}</button>
         </div>
+        <div id="tx-subform-${txId}"></div>
+      </div>`;
+    setTxTipo(txId, 'gasto');
+  }
+}
+
+function setTxTipo(txId, tipo) {
+  const gastoBtn = document.getElementById(`txtipo-gasto-${txId}`);
+  const nominaBtn = document.getElementById(`txtipo-nomina-${txId}`);
+  if (gastoBtn && nominaBtn) {
+    gastoBtn.className = tipo === 'gasto' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+    nominaBtn.className = tipo === 'nomina' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+  }
+  const sub = document.getElementById(`tx-subform-${txId}`);
+  if (!sub) return;
+  const proys = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).slice().reverse();
+  const proyOptions = proys.map(p=>`<option value="${p.num}">${p.num} — ${p.nombre}</option>`).join('');
+  if (tipo === 'gasto') {
+    const categorias = ['Materiales','Herramientas','Renta equipo','Transporte','Storage','Otros'];
+    const catOptions = categorias.map(c=>`<option value="${c}">${c}</option>`).join('');
+    sub.innerHTML = `
+      <div class="fl" style="font-size:.6rem;">${tt('Categoría','Category')}</div>
+      <select id="txcat-${txId}" style="width:100%;margin-bottom:8px;">${catOptions}</select>
+      <div class="fl" style="font-size:.6rem;">${tt('Proyecto','Project')}</div>
+      <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">${tt('Selecciona...','Select...')}</option>${proyOptions}</select>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToGasto('${txId}')">${tt('✓ Guardar como Gasto','✓ Save as Expense')}</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">${tt('Cancelar','Cancel')}</button>
+      </div>`;
+  } else {
+    sub.innerHTML = `
+      <div class="fl" style="font-size:.6rem;">${tt('Empleado','Employee')}</div>
+      <input type="text" id="txemp-${txId}" list="tx-emp-list-${txId}" placeholder="Antonio" style="width:100%;margin-bottom:8px;box-sizing:border-box;">
+      <datalist id="tx-emp-list-${txId}">${(S.empleados||[]).filter(e=>(e.empresa||'BH Pro')===ACTIVE_COMPANY).map(e=>`<option value="${e.nombre}">`).join('')}</datalist>
+      <div class="fl" style="font-size:.6rem;">${tt('Proyecto','Project')}</div>
+      <select id="txproy-${txId}" style="width:100%;margin-bottom:8px;"><option value="">${tt('Selecciona...','Select...')}</option>${proyOptions}</select>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" style="flex:1;" onclick="confirmTxToNomina('${txId}')">${tt('✓ Guardar como Pago a Empleado','✓ Save as Employee Payment')}</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleTxCategorize('${txId}')">${tt('Cancelar','Cancel')}</button>
       </div>`;
   }
 }
@@ -2764,7 +2863,20 @@ function confirmTxToGasto(txId) {
   const cat = document.getElementById('txcat-'+txId).value;
   const proy = document.getElementById('txproy-'+txId).value;
   if (!proy) return alert('Selecciona un proyecto');
-  S.gastos.push({ id:gid(), fecha:tx.date, proy, cat, monto:Math.abs(tx.amount), desc:tx.name, recibo:'', foto:'', plaid_tx_id:txId });
+  S.gastos.push({ id:gid(), fecha:tx.date, proy, cat, monto:Math.abs(tx.amount), desc:tx.name, recibo:'', foto:'', plaid_tx_id:txId, empresa: ACTIVE_COMPANY });
+  saveData();
+  loadBankData();
+  renderAll();
+}
+
+function confirmTxToNomina(txId) {
+  const tx = LAST_BANK_TXS[txId];
+  if (!tx) return;
+  const empleado = document.getElementById('txemp-'+txId).value.trim();
+  const proy = document.getElementById('txproy-'+txId).value;
+  if (!empleado) return alert(tt('Escribe el nombre del empleado','Enter the employee name'));
+  if (!proy) return alert(tt('Selecciona un proyecto','Select a project'));
+  S.nomina.push({ id:gid(), fecha:tx.date, proy, empleado, horas:1, tarifa:Math.abs(tx.amount), total:Math.abs(tx.amount), estado:'Pagado', foto:'', notas:tx.name, plaid_tx_id:txId, empresa: ACTIVE_COMPANY });
   saveData();
   loadBankData();
   renderAll();
@@ -2954,6 +3066,13 @@ function renderProy() {
 function empresaTag(num){const p=S.proyectos.find(x=>x.num===num);return p&&p.empresa==='Kratos'?'<span style="color:#b98cff;font-size:.6rem;font-weight:700;">⚡</span> ':'';}
 
 function proyNumsEmpresaActiva(){ return new Set(S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).map(p=>p.num)); }
+// Returns true if a project with this exact number ALSO exists under a DIFFERENT company than
+// the one given — i.e. the number is ambiguous between BH Pro and Kratos. Used so that legacy
+// gastos/nómina rows with no "empresa" tag of their own don't get silently counted toward the
+// wrong company's project just because the numbers happen to collide.
+function proyectoNumExisteEnOtraEmpresa(num, empresaActual) {
+  return S.proyectos.some(p => p.num === num && (p.empresa||'BH Pro') !== empresaActual);
+}
 
 function renderGasto() {
   const q=(document.getElementById('sq-g')?.value||'').toLowerCase().trim();
@@ -2970,20 +3089,24 @@ function renderGasto() {
 function renderNomina() {
   const q=(document.getElementById('sq-n')?.value||'').toLowerCase().trim();
   const proyNums = proyNumsEmpresaActiva();
-  const nominaEmpresa = S.nomina.filter(n=>proyNums.has(n.proy));
+  const nominaEmpresa = S.nomina.filter(n=> n.empresa ? n.empresa===ACTIVE_COMPANY : proyNums.has(n.proy));
   const list=q?nominaEmpresa.filter(n=>(n.empleado||'').toLowerCase().includes(q)||(n.proy||'').toLowerCase().includes(q)||(n.notas||'').toLowerCase().includes(q)):nominaEmpresa;
   let tot=0;
-  document.getElementById('tb-n').innerHTML=list.slice().reverse().map(n=>{tot+=n.total;const proyLabel=n.proy?`<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${n.proy}')">${n.proy}</span>`:'';return`<tr><td>${fd(n.fecha)}</td><td>${proyLabel}</td><td>${n.empleado}</td><td>${n.horas}</td><td>${fmt(n.tarifa)}</td><td style="color:var(--green)">${fmt(n.total)}</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.notas||''}</td><td><button class="del" onclick="delN('${n.id}')">✕</button></td></tr>`;}).join('');
+  document.getElementById('tb-n').innerHTML=list.slice().reverse().map(n=>{tot+=n.total;const proyLabel=n.proy?`<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openProjectDetailByNum('${n.proy}')">${n.proy}</span>`:'';const estadoN=n.estado||'Pagado';const ecN=estadoN==='Pagado'?'bp':'bpen';const fotoBtnN=n.foto?`<button class="btn btn-sm" style="background:#1B3A6B;" onclick="viewNominaFoto('${n.id}')">📷</button>`:'';return`<tr><td>${fd(n.fecha)}</td><td>${proyLabel}</td><td>${n.empleado}</td><td>${n.horas}</td><td>${fmt(n.tarifa)}</td><td style="color:var(--green)">${fmt(n.total)}</td><td><span class="badge ${ecN}" onclick="toggleNominaEstado('${n.id}')">${tt(estadoN, estadoN==='Pagado'?'Paid':'Pending')}</span></td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.notas||''}</td><td>${fotoBtnN}<button class="del" onclick="delN('${n.id}')">✕</button></td></tr>`;}).join('');
   document.getElementById('tf-nt').textContent=fmt(tot);
   const si=document.getElementById('si-n');
   if(si)si.textContent=q?list.length+' registro'+(list.length!==1?'s':'')+' · Total: '+fmt(tot):'';
   const empData=q?list:nominaEmpresa;
   const emp={};
-  empData.forEach(n=>{if(!emp[n.empleado])emp[n.empleado]=0;emp[n.empleado]+=n.total;});
-  document.getElementById('tb-emp').innerHTML=Object.entries(emp).sort((a,b)=>b[1]-a[1]).map(([e,t])=>{
+  empData.forEach(n=>{
+    if(!emp[n.empleado])emp[n.empleado]={pagado:0,pendiente:0};
+    if((n.estado||'Pagado')==='Pagado') emp[n.empleado].pagado+=n.total; else emp[n.empleado].pendiente+=n.total;
+  });
+  document.getElementById('tb-emp').innerHTML=Object.entries(emp).sort((a,b)=>(b[1].pagado+b[1].pendiente)-(a[1].pagado+a[1].pendiente)).map(([e,t])=>{
     const empRecord = S.empleados.find(x=>x.nombre===e && (x.empresa||'BH Pro')===ACTIVE_COMPANY);
     const nameCell = empRecord ? `<span style="color:var(--blue);text-decoration:underline;cursor:pointer;" onclick="openEmpleadoDetail('${empRecord.id}')">${e}</span>` : e;
-    return `<tr><td>${nameCell}</td><td style="color:var(--green)">${fmt(t)}</td></tr>`;
+    const pendienteCell = t.pendiente > 0 ? ` <span style="color:var(--gold);font-size:.65rem;">(${tt('debe','owed')}: ${fmt(t.pendiente)})</span>` : '';
+    return `<tr><td>${nameCell}</td><td style="color:var(--green)">${fmt(t.pagado)}${pendienteCell}</td></tr>`;
   }).join('');
   // Annual report
   const annEl=document.getElementById('tb-annual');
