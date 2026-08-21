@@ -727,13 +727,20 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       const cambios = [];
       if (nombre !== undefined && nombre !== proj.nombre) cambios.push(`Nombre: "${proj.nombre||''}" → "${nombre}"`);
       if (cliente !== undefined && cliente !== proj.cliente) cambios.push(`Cliente: "${proj.cliente||''}" → "${cliente}"`);
+      const facturaLigadaPreview = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
+      const cobroLigadoPreview = D.cobros.find(c => c.num === String(numero) && (c.empresa||'BH Pro') === emp);
+      const valorObjetivo = valor !== undefined ? valor : proj.valor;
+      const facturaDesincronizada = facturaLigadaPreview && Math.abs((facturaLigadaPreview.amount||0) - valorObjetivo) > 0.01;
+      const cobroDesincronizado = cobroLigadoPreview && Math.abs((cobroLigadoPreview.monto||0) - valorObjetivo) > 0.01;
       if (valor !== undefined && Math.abs((proj.valor||0) - valor) > 0.01) cambios.push(`Valor: $${(proj.valor||0).toFixed(2)} → $${valor.toFixed(2)}`);
+      if (facturaDesincronizada) cambios.push(`Factura #${numero} está en $${(facturaLigadaPreview.amount||0).toFixed(2)} y no coincide con el proyecto — se ajustará a $${valorObjetivo.toFixed(2)}`);
+      if (cobroDesincronizado) cambios.push(`Cobro #${numero} está en $${(cobroLigadoPreview.monto||0).toFixed(2)} y no coincide con el proyecto — se ajustará a $${valorObjetivo.toFixed(2)}`);
       if (loc !== undefined && loc !== proj.loc) cambios.push(`Locación: "${proj.loc||''}" → "${loc}"`);
       if (estado !== undefined && estado !== proj.estado) cambios.push(`Estado: "${proj.estado||''}" → "${estado}"`);
       if (notas !== undefined && notas !== proj.notas) cambios.push(`Notas: "${proj.notas||'(vacía)'}" → "${notas}"`);
       if (inicio !== undefined && inicio !== proj.inicio) cambios.push(`Fecha de inicio: "${proj.inicio||'(vacía)'}" → "${inicio}"`);
       if (fin !== undefined && fin !== proj.fin) cambios.push(`Fecha de fin: "${proj.fin||'(vacía)'}" → "${fin}"`);
-      if (!cambios.length) return { resultMsg: `No hay ningún cambio real que aplicar al proyecto #${numero} — los valores que diste son iguales a los que ya tiene.`, changed: false };
+      if (!cambios.length) return { resultMsg: `No hay ningún cambio real que aplicar al proyecto #${numero} — los valores que diste son iguales a los que ya tiene, y la factura/cobro ya coinciden.`, changed: false };
       // SAFETY GATE: same hard requirement as edit_invoice — without confirmado === true, this
       // NEVER writes anything, regardless of what the model intended.
       if (confirmado !== true) {
@@ -745,27 +752,25 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       if (nombre !== undefined) proj.nombre = nombre;
       if (cliente !== undefined) proj.cliente = cliente;
       let mensajeSync = '';
-      if (valor !== undefined) {
-        proj.valor = valor;
-        // SYNC FIX: keep the linked invoice (scaling items proportionally) and cobro amount
-        // matching the corrected project value — "a donde se factura esa es la locación" applied
-        // the same way to money: the project's value is the source of truth for everything.
-        const facturaLigada = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
-        if (facturaLigada && Array.isArray(facturaLigada.items) && facturaLigada.items.length) {
-          const totalActualFactura = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0) || facturaLigada.amount || 1;
-          const factorEscala = valor / totalActualFactura;
-          facturaLigada.items = facturaLigada.items.map(it => ({ ...it, rate: Math.round(((it.rate||0)*factorEscala)*100)/100 }));
-          facturaLigada.amount = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0);
-          mensajeSync += ` La factura #${numero} se ajustó al mismo valor.`;
-        } else if (facturaLigada) {
-          facturaLigada.amount = valor;
-          mensajeSync += ` La factura #${numero} se ajustó al mismo valor.`;
+      if (valor !== undefined) proj.valor = valor;
+      // SYNC FIX: always reconcile the linked invoice/cobro against the project's FINAL value —
+      // not just when this specific call changes proj.valor. This is what catches the case where
+      // the project already had the right number but the invoice was wrong from before and never
+      // got corrected.
+      if (facturaDesincronizada) {
+        if (Array.isArray(facturaLigadaPreview.items) && facturaLigadaPreview.items.length) {
+          const totalActualFactura = facturaLigadaPreview.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0) || facturaLigadaPreview.amount || 1;
+          const factorEscala = valorObjetivo / totalActualFactura;
+          facturaLigadaPreview.items = facturaLigadaPreview.items.map(it => ({ ...it, rate: Math.round(((it.rate||0)*factorEscala)*100)/100 }));
+          facturaLigadaPreview.amount = facturaLigadaPreview.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0);
+        } else {
+          facturaLigadaPreview.amount = valorObjetivo;
         }
-        const cobroLigado = D.cobros.find(c => c.num === String(numero) && (c.empresa||'BH Pro') === emp);
-        if (cobroLigado) {
-          cobroLigado.monto = valor;
-          mensajeSync += ` El cobro también quedó en $${valor.toFixed(2)}.`;
-        }
+        mensajeSync += ` La factura #${numero} se ajustó a $${valorObjetivo.toFixed(2)}.`;
+      }
+      if (cobroDesincronizado) {
+        cobroLigadoPreview.monto = valorObjetivo;
+        mensajeSync += ` El cobro también quedó en $${valorObjetivo.toFixed(2)}.`;
       }
       if (loc !== undefined) proj.loc = loc;
       if (estado !== undefined) proj.estado = estado;
