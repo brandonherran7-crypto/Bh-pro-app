@@ -264,15 +264,22 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadRegistrosHuerfanos()">🔍 Buscar Huérfanos</button>
     <div id="huerfanos-result" style="font-size:.75rem;"></div>
   </div>
+  <div class="card admin-only" style="display:none;border:2px solid var(--red);">
+    <div class="card-title" style="font-size:1rem;color:var(--red);">⚠️ Deshacer Cobros Creados por Error</div>
+    <p style="font-size:.7rem;color:var(--gray);margin-bottom:10px;">Esto quita los 26 cobros "Pendiente" que se crearon automáticamente para proyectos viejos de BH Pro que nunca tuvieron registro en Collections. Solo borra los que siguen exactamente como se crearon (Pendiente, sin tipo de pago ni fecha) — si ya tocaste alguno, ese no se toca.</p>
+    <button class="btn" style="width:100%;background:var(--red);font-size:.85rem;padding:12px;" onclick="deshacerCobrosAutoCreados()">⚠️ Deshacer los 26 Cobros</button>
+    <div id="deshacer-result" style="font-size:.75rem;margin-top:8px;"></div>
+  </div>
   <div class="card admin-only" style="display:none;border:2px solid var(--gold);">
     <div class="card-title" style="font-size:1rem;">🔧 Arreglar Todo (Proyectos ↔ Cobros ↔ Ubicaciones)</div>
-    <p style="font-size:.7rem;color:var(--gray);margin-bottom:10px;">Un solo botón que: (1) crea el cobro Pendiente de cualquier proyecto que no lo tenga, y (2) unifica las ubicaciones repetidas del mismo cliente en una sola. Tócalo cada vez que algo no coincida entre Proyectos, Collections o Locations.</p>
+    <p style="font-size:.7rem;color:var(--gray);margin-bottom:10px;">Un solo botón que: (1) crea el cobro Pendiente de cualquier proyecto que no lo tenga, y (2) unifica las ubicaciones repetidas del mismo cliente en una sola. <b style="color:var(--gold);">Úsalo solo cuando tú decidas que quieres esa sincronización</b> — ya no se ejecuta solo.</p>
     <button class="btn" style="width:100%;font-size:.85rem;padding:12px;" onclick="arreglarTodoAhora()">🔧 Arreglar Todo Ahora</button>
     <div id="arreglar-todo-result" style="font-size:.75rem;margin-top:8px;"></div>
   </div>
   <div class="card admin-only" style="display:none;border:1px solid #2ECC8A33;">
     <div class="card-title">🔄 Proyectos sin Cobro (Sincronizar con Collections)</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Todo proyecto debería tener su cobro correspondiente en Collections desde que se crea. Si tienes proyectos viejos que se crearon antes de este arreglo y no aparecen ahí, aquí puedes crearles el cobro Pendiente de un solo toque.</p>
+
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadProyectosSinCobro()">🔍 Buscar Proyectos sin Cobro</button>
     <div id="sin-cobro-result" style="font-size:.75rem;"></div>
   </div>
@@ -2525,6 +2532,24 @@ async function loadBackupsList() {
   }
 }
 
+async function deshacerCobrosAutoCreados() {
+  const numeros = ['1113','1117','1126','1127','1128','1132','1135','1140','1139','1138','1067','1069','1103','1104','1114','1115','1116','1119','1120','1129','1130','1131','1133','1134','1136','1137'];
+  if (!confirm(`¿Quitar los ${numeros.length} cobros Pendiente que se crearon automáticamente? Solo se borran los que siguen exactamente como se crearon (Pendiente, sin tipo/fecha de pago).`)) return;
+  const box = document.getElementById('deshacer-result');
+  box.textContent = tt('Deshaciendo...','Undoing...');
+  try {
+    const res = await fetch('/api/cobros/deshacer-auto-creados', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body: JSON.stringify({numeros, empresa:'BH Pro'})});
+    const raw = await res.text();
+    let d;
+    try { d = JSON.parse(raw); } catch(e) { box.textContent = tt('Respuesta inesperada: ','Unexpected response: ') + raw.slice(0,300); return; }
+    if (!res.ok) { box.textContent = tt('Error: ','Error: ') + (d.error||''); return; }
+    box.innerHTML = `<span style="color:var(--green);">✅ ${d.eliminados} ${tt('cobro(s) eliminado(s).','collection(s) removed.')}</span>`;
+    await loadData();
+    renderAll();
+  } catch(e) {
+    box.textContent = tt('Error de red: ','Network error: ') + e.message;
+  }
+}
 async function arreglarTodoAhora() {
   const box = document.getElementById('arreglar-todo-result');
   box.textContent = tt('Arreglando todo, un momento...','Fixing everything, one moment...');
