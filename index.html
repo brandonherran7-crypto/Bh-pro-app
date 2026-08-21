@@ -1135,22 +1135,23 @@ function savePdEdit() {
     p.pedroPct = parseFloat(document.getElementById('pd-e-pedropct').value) || 0;
     p.pedroValor = parseFloat(document.getElementById('pd-e-pedrofijo').value) || 0;
   }
-  // SYNC FIX: if the project's value was corrected, propagate that same number to the matching
-  // invoice (scaling its line items proportionally so they still add up correctly) and to the
-  // matching cobro — instead of leaving the project, invoice PDF, and collection amount disagreeing.
-  if (valorCambio) {
-    const facturaLigada = S.facturas.find(f => f.number===numActual && (f.empresa||'BH Pro')===empresaActual);
-    if (facturaLigada && Array.isArray(facturaLigada.items) && facturaLigada.items.length) {
+  // SYNC FIX: don't only check "did the project's value change in THIS edit" — that misses the
+  // exact case Brandon hit (project already correct, invoice was wrong from before and never got
+  // touched). Instead, always check whether the linked invoice/cobro currently DISAGREE with the
+  // project's final value, and fix them whenever they don't match, regardless of what changed.
+  const facturaLigada = S.facturas.find(f => f.number===numActual && (f.empresa||'BH Pro')===empresaActual);
+  if (facturaLigada && Math.abs((facturaLigada.amount||0) - newValor) > 0.01) {
+    if (Array.isArray(facturaLigada.items) && facturaLigada.items.length) {
       const totalActualFactura = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0) || facturaLigada.amount || 1;
       const factorEscala = newValor / totalActualFactura;
       facturaLigada.items = facturaLigada.items.map(it => ({ ...it, rate: Math.round(((it.rate||0)*factorEscala)*100)/100 }));
       facturaLigada.amount = facturaLigada.items.reduce((s,it)=>s+((it.qty||1)*(it.rate||0)),0);
-    } else if (facturaLigada) {
+    } else {
       facturaLigada.amount = newValor;
     }
-    const cobroLigado = S.cobros.find(c => c.num===numActual && (c.empresa||'BH Pro')===empresaActual);
-    if (cobroLigado) cobroLigado.monto = newValor;
   }
+  const cobroLigado = S.cobros.find(c => c.num===numActual && (c.empresa||'BH Pro')===empresaActual);
+  if (cobroLigado && Math.abs((cobroLigado.monto||0) - newValor) > 0.01) cobroLigado.monto = newValor;
   saveData();
   document.getElementById('pd-edit-form').style.display = 'none';
   document.getElementById('pd-title').textContent = `#${p.num} — ${p.nombre}`;
