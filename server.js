@@ -344,6 +344,26 @@ app.post('/api/proyectos/arreglar-todo', adminAuth, (q, r) => {
     r.json({ cobrosCreados, locacionesActualizadas });
   } catch (e) { r.status(500).json({ error: e.message }); }
 });
+// UNDO: Brandon only wanted the auto-sync function to exist for FUTURE projects — it should
+// never have retroactively invented "Pendiente" collections for old projects that simply never
+// had a Collections record (regardless of whether they were actually paid outside the app).
+// This removes exactly the ones matching the given numbers, and only if they're still sitting at
+// estado "Pendiente" with no payment info — so anything he's touched or paid since is left alone.
+app.post('/api/cobros/deshacer-auto-creados', adminAuth, (q, r) => {
+  try {
+    const { numeros, empresa } = q.body;
+    if (!Array.isArray(numeros) || !numeros.length) return r.status(400).json({ error: 'Falta la lista de números.' });
+    const empresaObj = empresa || 'BH Pro';
+    const antes = D.cobros.length;
+    D.cobros = D.cobros.filter(c => {
+      const esCandidato = numeros.includes(c.num) && (c.empresa||'BH Pro') === empresaObj && c.estado === 'Pendiente' && !c.tipo && !c.cheque && !c.fpago;
+      return !esCandidato;
+    });
+    const eliminados = antes - D.cobros.length;
+    if (eliminados > 0) saveToDisk();
+    r.json({ eliminados });
+  } catch (e) { r.status(500).json({ error: e.message }); }
+});
 // of their own AND whose project number is one of those colliding ones — those are the rows that
 // can't be reliably assigned to a company by number alone and need a human to confirm.
 app.get('/api/proyectos/colisiones', adminAuth, (q, r) => {
