@@ -258,31 +258,6 @@ select option{background:var(--black-3);}
     <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadCobrosDuplicados()" data-i18n="btn.buscar_duplicados">🔍 Buscar Duplicados</button>
     <div id="cobros-dup-result" style="font-size:.75rem;"></div>
   </div>
-  <div class="card admin-only" style="display:none;border:1px solid #FF6B6B33;">
-    <div class="card-title">🔗 Registros Huérfanos (Proyectos vs Cobros/Gastos/Nómina)</div>
-    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Cobros, gastos, nómina o facturas que apuntan a un # de proyecto que ya no existe (ej. porque se borró el proyecto sin borrar lo ligado). Esto es lo que hace que Proyectos y Cobros no coincidan.</p>
-    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadRegistrosHuerfanos()">🔍 Buscar Huérfanos</button>
-    <div id="huerfanos-result" style="font-size:.75rem;"></div>
-  </div>
-  <div class="card admin-only" style="display:none;border:2px solid var(--red);">
-    <div class="card-title" style="font-size:1rem;color:var(--red);">⚠️ Deshacer Cobros Creados por Error</div>
-    <p style="font-size:.7rem;color:var(--gray);margin-bottom:10px;">Esto quita los 26 cobros "Pendiente" que se crearon automáticamente para proyectos viejos de BH Pro que nunca tuvieron registro en Collections. Solo borra los que siguen exactamente como se crearon (Pendiente, sin tipo de pago ni fecha) — si ya tocaste alguno, ese no se toca.</p>
-    <button class="btn" style="width:100%;background:var(--red);font-size:.85rem;padding:12px;" onclick="deshacerCobrosAutoCreados()">⚠️ Deshacer los 26 Cobros</button>
-    <div id="deshacer-result" style="font-size:.75rem;margin-top:8px;"></div>
-  </div>
-  <div class="card admin-only" style="display:none;border:2px solid var(--gold);">
-    <div class="card-title" style="font-size:1rem;">🔧 Arreglar Todo (Proyectos ↔ Cobros ↔ Ubicaciones)</div>
-    <p style="font-size:.7rem;color:var(--gray);margin-bottom:10px;">Un solo botón que: (1) crea el cobro Pendiente de cualquier proyecto que no lo tenga, y (2) unifica las ubicaciones repetidas del mismo cliente en una sola. <b style="color:var(--gold);">Úsalo solo cuando tú decidas que quieres esa sincronización</b> — ya no se ejecuta solo.</p>
-    <button class="btn" style="width:100%;font-size:.85rem;padding:12px;" onclick="arreglarTodoAhora()">🔧 Arreglar Todo Ahora</button>
-    <div id="arreglar-todo-result" style="font-size:.75rem;margin-top:8px;"></div>
-  </div>
-  <div class="card admin-only" style="display:none;border:1px solid #2ECC8A33;">
-    <div class="card-title">🔄 Proyectos sin Cobro (Sincronizar con Collections)</div>
-    <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;">Todo proyecto debería tener su cobro correspondiente en Collections desde que se crea. Si tienes proyectos viejos que se crearon antes de este arreglo y no aparecen ahí, aquí puedes crearles el cobro Pendiente de un solo toque.</p>
-
-    <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="loadProyectosSinCobro()">🔍 Buscar Proyectos sin Cobro</button>
-    <div id="sin-cobro-result" style="font-size:.75rem;"></div>
-  </div>
   <div class="card admin-only" style="display:none;border:1px solid #E74C3C33;">
     <div class="card-title" data-i18n="ct.debug_asistente">🐛 Diagnóstico del Asistente IA</div>
     <p style="font-size:.68rem;color:var(--gray);margin-bottom:8px;" data-i18n="p.debug_desc">Si el asistente falla o no responde bien, toca este botón para ver el detalle técnico de las últimas veces que se usó — así puedo revisar exactamente qué pasó.</p>
@@ -496,8 +471,20 @@ select option{background:var(--black-3);}
   <p class="page-sub" data-i18n="sub.gastos">Materiales, herramientas, renta</p>
   <div class="card">
     <div class="card-title" data-i18n="ct.registrar_gasto">Registrar Gasto</div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="g-fec"></div><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="g-pro" onfocus="populateProjectSelect('g-pro', true)"><option value="" data-i18n="opt.selecciona">Selecciona...</option></select></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="g-cat"><option value="Materiales" data-i18n="opt.materiales">Materiales</option><option value="Herramientas" data-i18n="opt.herramientas">Herramientas</option><option value="Renta equipo" data-i18n="opt.renta_equipo">Renta equipo</option><option value="Transporte" data-i18n="opt.transporte">Transporte</option><option value="Storage" data-i18n="opt.storage">Storage</option><option value="Otros" data-i18n="opt.otros">Otros</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="g-mon" placeholder="0"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="g-fec"></div><div><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="g-cat"><option value="Materiales" data-i18n="opt.materiales">Materiales</option><option value="Herramientas" data-i18n="opt.herramientas">Herramientas</option><option value="Renta equipo" data-i18n="opt.renta_equipo">Renta equipo</option><option value="Transporte" data-i18n="opt.transporte">Transporte</option><option value="Storage" data-i18n="opt.storage">Storage</option><option value="Otros" data-i18n="opt.otros">Otros</option></select></div></div>
+    <button type="button" class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="toggleGastoSplitMode()"><span id="g-split-toggle-label">🔀 Dividir este gasto entre varios proyectos</span></button>
+
+    <div id="g-single-proyecto">
+      <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="g-pro" onfocus="populateProjectSelect('g-pro', true)"><option value="" data-i18n="opt.selecciona">Selecciona...</option></select></div><div><div class="fl" data-i18n="fld.monto">Monto $</div><input type="number" id="g-mon" placeholder="0"></div></div>
+    </div>
+
+    <div id="g-split-proyectos" style="display:none;">
+      <div class="fl" style="margin-bottom:6px;">🔀 Distribución por proyecto</div>
+      <div id="g-split-rows"></div>
+      <button type="button" class="btn btn-sm btn-outline" style="width:100%;margin:6px 0 10px;" onclick="addGastoSplitRow()">+ Agregar otro proyecto</button>
+      <div style="text-align:right;font-size:.8rem;color:var(--gold);margin-bottom:10px;">Total: <span id="g-split-total">$0.00</span></div>
+    </div>
+
     <div class="fg"><div><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="g-des" placeholder="Pintura, cinta..." data-i18n-ph="ph.desc_gasto"></div><div><div class="fl" data-i18n="fld.recibo">Recibo</div><input type="text" id="g-rec" placeholder="Home Depot"></div></div>
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.foto_del_recibogasto_opcional">Foto del recibo/gasto (opcional)</div><input type="file" id="g-foto" accept="image/*" onchange="previewGastoFoto(this)"><div id="g-foto-preview" style="margin-top:6px;"></div></div>
     <button class="btn" onclick="addGasto()" data-i18n="btn.registrar_gasto">+ Registrar Gasto</button>
@@ -524,10 +511,22 @@ select option{background:var(--black-3);}
   </div>
   <div class="card">
     <div class="card-title" data-i18n="ct.registrar_pago">Registrar Pago</div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="n-fec"></div><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="n-pro" onfocus="populateProjectSelect('n-pro')"><option value="" data-i18n="opt.selecciona">Selecciona...</option></select></div></div>
-    <div class="fg"><div><div class="fl" data-i18n="fld.empleado">Empleado</div><input type="text" id="n-emp" list="n-emp-list" placeholder="Antonio" onfocus="populateEmpleadoDatalist()" onchange="autofillEmpleadoTarifa()"></div><div><div class="fl" data-i18n="fld.total_pagado">Total Pagado $</div><input type="number" id="n-tot" placeholder="0"></div></div>
+    <div class="fg"><div><div class="fl" data-i18n="fld.fecha">Fecha</div><input type="date" id="n-fec"></div><div><div class="fl" data-i18n="fld.empleado">Empleado</div><input type="text" id="n-emp" list="n-emp-list" placeholder="Antonio" onfocus="populateEmpleadoDatalist()" onchange="autofillEmpleadoTarifa()"></div></div>
     <datalist id="n-emp-list"></datalist>
-    <div class="fg"><div><div class="fl" data-i18n="fld.horasdias">Horas/Días</div><input type="number" id="n-hor" placeholder="1"></div><div><div class="fl" data-i18n="fld.tarifa">Tarifa $</div><input type="number" id="n-tar" placeholder="0"></div></div>
+    <button type="button" class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;" onclick="toggleNominaSplitMode()"><span id="n-split-toggle-label">🔀 Dividir este pago entre varios proyectos</span></button>
+
+    <div id="n-single-proyecto">
+      <div class="fg"><div><div class="fl" data-i18n="fld.proyecto"># Proyecto</div><select id="n-pro" onfocus="populateProjectSelect('n-pro')"><option value="" data-i18n="opt.selecciona">Selecciona...</option></select></div><div><div class="fl" data-i18n="fld.total_pagado">Total Pagado $</div><input type="number" id="n-tot" placeholder="0"></div></div>
+      <div class="fg"><div><div class="fl" data-i18n="fld.horasdias">Horas/Días</div><input type="number" id="n-hor" placeholder="1"></div><div><div class="fl" data-i18n="fld.tarifa">Tarifa $</div><input type="number" id="n-tar" placeholder="0"></div></div>
+    </div>
+
+    <div id="n-split-proyectos" style="display:none;">
+      <div class="fl" style="margin-bottom:6px;">🔀 Distribución por proyecto</div>
+      <div id="n-split-rows"></div>
+      <button type="button" class="btn btn-sm btn-outline" style="width:100%;margin:6px 0 10px;" onclick="addNominaSplitRow()">+ Agregar otro proyecto</button>
+      <div style="text-align:right;font-size:.8rem;color:var(--gold);margin-bottom:10px;">Total: <span id="n-split-total">$0.00</span></div>
+    </div>
+
     <div class="fg"><div><div class="fl" data-i18n="fld.estado">Estado</div><select id="n-est"><option value="Pagado" data-i18n="lbl.pagado">Pagado</option><option value="Pendiente" data-i18n="opt.pendiente">Pendiente</option></select></div><div></div></div>
     <div id="n-emp-balance" style="font-size:.7rem;color:var(--gold);margin-bottom:8px;"></div>
     <div style="margin-bottom:8px;"><div class="fl">Comprobante de pago (Zelle, wire, cash app...) (opcional)</div><input type="file" id="n-foto" accept="image/*" onchange="previewNominaFoto(this)"><div id="n-foto-preview" style="margin-top:6px;"></div></div>
@@ -1337,7 +1336,9 @@ function addNominaToProject() {
   if (!PD_CURRENT_NUM) return;
   const tot = parseFloat(document.getElementById('pd-n-total').value)||0;
   if (!tot) return alert('Ingresa el total');
-  S.nomina.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, empleado:document.getElementById('pd-n-emp').value.trim(), horas:parseFloat(document.getElementById('pd-n-horas').value)||1, tarifa:parseFloat(document.getElementById('pd-n-tarifa').value)||0, total:tot, notas:'', empresa: ACTIVE_COMPANY });
+  const empleado = document.getElementById('pd-n-emp').value.trim();
+  crearFichaEmpleadoSiNoExiste(empleado, ACTIVE_COMPANY);
+  S.nomina.push({ id:gid(), fecha:new Date().toISOString().slice(0,10), proy:PD_CURRENT_NUM, empleado, horas:parseFloat(document.getElementById('pd-n-horas').value)||1, tarifa:parseFloat(document.getElementById('pd-n-tarifa').value)||0, total:tot, notas:'', empresa: ACTIVE_COMPANY });
   saveData();
   ['pd-n-emp','pd-n-tarifa','pd-n-total'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pd-n-horas').value = '1';
@@ -1443,8 +1444,8 @@ function calcTotals(empresaFiltro) {
   return { tv, tg, tn, cob, pen, gan, fee, pedro, d, arlene, brandon, apag, afalta };
 }
 
-function populateProjectSelect(selectId, allowGeneral) {
-  const sel = document.getElementById(selectId);
+function populateProjectSelect(selectIdOrEl, allowGeneral) {
+  const sel = typeof selectIdOrEl === 'string' ? document.getElementById(selectIdOrEl) : selectIdOrEl;
   if (!sel) return;
   const current = sel.value;
   const sorted = S.proyectos.filter(p=>(p.empresa||'BH Pro')===ACTIVE_COMPANY).sort((a,b)=> a.num.localeCompare(b.num, undefined, {numeric:true}));
@@ -1613,11 +1614,56 @@ function fileToCompressedBase64(file, maxW) {
   });
 }
 
+let GASTO_SPLIT_MODE = false;
+function toggleGastoSplitMode() {
+  GASTO_SPLIT_MODE = !GASTO_SPLIT_MODE;
+  document.getElementById('g-single-proyecto').style.display = GASTO_SPLIT_MODE ? 'none' : 'block';
+  document.getElementById('g-split-proyectos').style.display = GASTO_SPLIT_MODE ? 'block' : 'none';
+  document.getElementById('g-split-toggle-label').textContent = GASTO_SPLIT_MODE
+    ? tt('↩ Volver a un solo proyecto','↩ Back to a single project')
+    : tt('🔀 Dividir este gasto entre varios proyectos','🔀 Split this expense across projects');
+  if (GASTO_SPLIT_MODE && !document.getElementById('g-split-rows').children.length) {
+    addGastoSplitRow(); addGastoSplitRow();
+  }
+}
+function addGastoSplitRow() {
+  const rows = document.getElementById('g-split-rows');
+  const rowId = 'gsr_' + Math.random().toString(36).slice(2,8);
+  const div = document.createElement('div');
+  div.id = rowId;
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+  div.innerHTML = `
+    <select class="g-split-proy" style="flex:2;" onfocus="populateProjectSelect(this, true)"><option value="">${tt('Selecciona...','Select...')}</option></select>
+    <input type="number" class="g-split-monto" placeholder="$0" style="flex:1;" oninput="updateGastoSplitTotal()">
+    <button type="button" class="del" onclick="document.getElementById('${rowId}').remove();updateGastoSplitTotal()">✕</button>`;
+  rows.appendChild(div);
+  populateProjectSelect(div.querySelector('.g-split-proy'), true);
+}
+function updateGastoSplitTotal() {
+  const montos = Array.from(document.querySelectorAll('.g-split-monto')).map(i=>parseFloat(i.value)||0);
+  const total = montos.reduce((s,m)=>s+m,0);
+  document.getElementById('g-split-total').textContent = fmt(total);
+}
 let ADD_GASTO_EN_CURSO = false;
 async function addGasto() {
   if (ADD_GASTO_EN_CURSO) return; // evita que un doble-toque mientras se procesa la foto cree dos gastos idénticos
-  const mon = parseFloat(document.getElementById('g-mon').value)||0;
-  if (!mon) return alert('Ingresa el monto');
+  let splits = [];
+  if (GASTO_SPLIT_MODE) {
+    const rows = document.querySelectorAll('#g-split-rows > div');
+    rows.forEach(row => {
+      let proy = row.querySelector('.g-split-proy').value.trim();
+      const monto = parseFloat(row.querySelector('.g-split-monto').value) || 0;
+      if (proy === 'GENERAL') proy = '';
+      if (monto) splits.push({ proy, monto });
+    });
+    if (!splits.length) return alert(tt('Agrega al menos un proyecto con su monto','Add at least one project with its amount'));
+  } else {
+    const mon = parseFloat(document.getElementById('g-mon').value)||0;
+    if (!mon) return alert('Ingresa el monto');
+    let proyVal = document.getElementById('g-pro').value.trim();
+    if (proyVal === 'GENERAL') proyVal = '';
+    splits = [{ proy: proyVal, monto: mon }];
+  }
   ADD_GASTO_EN_CURSO = true;
   try {
     const fotoInput = document.getElementById('g-foto');
@@ -1625,13 +1671,21 @@ async function addGasto() {
     if (fotoInput && fotoInput.files && fotoInput.files[0]) {
       try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) { console.log('Foto error:', e); }
     }
-    let proyVal = document.getElementById('g-pro').value.trim();
-    if (proyVal === 'GENERAL') proyVal = '';
-    S.gastos.push({ id:gid(), fecha:document.getElementById('g-fec').value, proy:proyVal, cat:document.getElementById('g-cat').value, monto:mon, desc:document.getElementById('g-des').value.trim(), recibo:document.getElementById('g-rec').value.trim(), foto, empresa: ACTIVE_COMPANY });
+    const fecha = document.getElementById('g-fec').value;
+    const cat = document.getElementById('g-cat').value;
+    const descBase = document.getElementById('g-des').value.trim();
+    const recibo = document.getElementById('g-rec').value.trim();
+    const esDividido = splits.length > 1;
+    splits.forEach((s, idx) => {
+      const desc = esDividido ? `${descBase}${descBase?' — ':''}${tt('gasto dividido','split expense')} ${idx+1}/${splits.length}` : descBase;
+      S.gastos.push({ id:gid(), fecha, proy:s.proy, cat, monto:s.monto, desc, recibo, foto, empresa: ACTIVE_COMPANY });
+    });
     await saveData();
-    ['g-fec','g-pro','g-mon','g-des','g-rec'].forEach(id=>document.getElementById(id).value='');
+    ['g-fec','g-pro','g-mon','g-des','g-rec'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
     if (fotoInput) fotoInput.value='';
     document.getElementById('g-foto-preview').innerHTML='';
+    document.getElementById('g-split-rows').innerHTML='';
+    if (GASTO_SPLIT_MODE) toggleGastoSplitMode();
     renderAll();
   } finally {
     ADD_GASTO_EN_CURSO = false;
@@ -1726,16 +1780,93 @@ function delFacturaArchivoExterno(facturaId) {
   renderAll();
 }
 
-async function addNomina() {
-  const tot = parseFloat(document.getElementById('n-tot').value)||0;
-  if (!tot) return alert('Ingresa el total');
-  const fotoInput = document.getElementById('n-foto');
-  let foto = '';
-  if (fotoInput.files && fotoInput.files[0]) {
-    try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
+let NOMINA_SPLIT_MODE = false;
+function toggleNominaSplitMode() {
+  NOMINA_SPLIT_MODE = !NOMINA_SPLIT_MODE;
+  document.getElementById('n-single-proyecto').style.display = NOMINA_SPLIT_MODE ? 'none' : 'block';
+  document.getElementById('n-split-proyectos').style.display = NOMINA_SPLIT_MODE ? 'block' : 'none';
+  document.getElementById('n-split-toggle-label').textContent = NOMINA_SPLIT_MODE
+    ? tt('↩ Volver a un solo proyecto','↩ Back to a single project')
+    : tt('🔀 Dividir este pago entre varios proyectos','🔀 Split this payment across projects');
+  if (NOMINA_SPLIT_MODE && !document.getElementById('n-split-rows').children.length) {
+    addNominaSplitRow(); addNominaSplitRow();
   }
-  S.nomina.push({ id:gid(), fecha:document.getElementById('n-fec').value, proy:document.getElementById('n-pro').value.trim(), empleado:document.getElementById('n-emp').value.trim(), horas:parseFloat(document.getElementById('n-hor').value)||1, tarifa:parseFloat(document.getElementById('n-tar').value)||0, total:tot, estado:document.getElementById('n-est').value, foto, notas:document.getElementById('n-not').value.trim(), empresa: ACTIVE_COMPANY });
-  saveData(); ['n-fec','n-pro','n-emp','n-hor','n-tar','n-tot','n-not','n-foto'].forEach(id=>document.getElementById(id).value=''); document.getElementById('n-est').value='Pagado'; document.getElementById('n-emp-balance').textContent=''; document.getElementById('n-foto-preview').innerHTML=''; renderAll();
+}
+function addNominaSplitRow() {
+  const rows = document.getElementById('n-split-rows');
+  const rowId = 'nsr_' + Math.random().toString(36).slice(2,8);
+  const div = document.createElement('div');
+  div.id = rowId;
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+  div.innerHTML = `
+    <select class="n-split-proy" style="flex:2;" onfocus="populateProjectSelect(this)"><option value="">${tt('Selecciona...','Select...')}</option></select>
+    <input type="number" class="n-split-monto" placeholder="$0" style="flex:1;" oninput="updateNominaSplitTotal()">
+    <button type="button" class="del" onclick="document.getElementById('${rowId}').remove();updateNominaSplitTotal()">✕</button>`;
+  rows.appendChild(div);
+  populateProjectSelect(div.querySelector('.n-split-proy'));
+}
+function updateNominaSplitTotal() {
+  const montos = Array.from(document.querySelectorAll('.n-split-monto')).map(i=>parseFloat(i.value)||0);
+  const total = montos.reduce((s,m)=>s+m,0);
+  document.getElementById('n-split-total').textContent = fmt(total);
+}
+let ADD_NOMINA_EN_CURSO = false;
+// Auto-creates a bare-bones employee ficha (just the name) the first time a payroll payment uses
+// a name that doesn't match anyone already saved — so every employee who ever gets paid ends up
+// with a profile, instead of only the ones Brandon remembered to add by hand beforehand.
+function crearFichaEmpleadoSiNoExiste(nombre, empresa) {
+  if (!nombre) return;
+  if (!S.empleados) S.empleados = [];
+  const yaExiste = S.empleados.some(e => (e.empresa||'BH Pro')===empresa && e.nombre.trim().toLowerCase()===nombre.trim().toLowerCase());
+  if (!yaExiste) {
+    S.empleados.push({ id:gid(), nombre: nombre.trim(), telefono:'', email:'', tarifaHabitual:0, notas:'', empresa });
+  }
+}
+async function addNomina() {
+  if (ADD_NOMINA_EN_CURSO) return;
+  const empleado = document.getElementById('n-emp').value.trim();
+  if (!empleado) return alert(tt('Escribe el nombre del empleado','Enter the employee name'));
+  let splits = [];
+  if (NOMINA_SPLIT_MODE) {
+    const rows = document.querySelectorAll('#n-split-rows > div');
+    rows.forEach(row => {
+      const proy = row.querySelector('.n-split-proy').value.trim();
+      const monto = parseFloat(row.querySelector('.n-split-monto').value) || 0;
+      if (proy && monto) splits.push({ proy, monto });
+    });
+    if (!splits.length) return alert(tt('Agrega al menos un proyecto con su monto','Add at least one project with its amount'));
+  } else {
+    const tot = parseFloat(document.getElementById('n-tot').value)||0;
+    if (!tot) return alert('Ingresa el total');
+    splits = [{ proy: document.getElementById('n-pro').value.trim(), monto: tot }];
+  }
+  ADD_NOMINA_EN_CURSO = true;
+  try {
+    const fotoInput = document.getElementById('n-foto');
+    let foto = '';
+    if (fotoInput.files && fotoInput.files[0]) {
+      try { foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
+    }
+    const fecha = document.getElementById('n-fec').value;
+    const estado = document.getElementById('n-est').value;
+    const notasBase = document.getElementById('n-not').value.trim();
+    const esDividido = splits.length > 1;
+    crearFichaEmpleadoSiNoExiste(empleado, ACTIVE_COMPANY);
+    splits.forEach((s, idx) => {
+      const notas = esDividido ? `${notasBase}${notasBase?' — ':''}${tt('pago dividido','split payment')} ${idx+1}/${splits.length}` : notasBase;
+      S.nomina.push({ id:gid(), fecha, proy:s.proy, empleado, horas: esDividido?1:(parseFloat(document.getElementById('n-hor').value)||1), tarifa: esDividido?s.monto:(parseFloat(document.getElementById('n-tar').value)||0), total:s.monto, estado, foto, notas, empresa: ACTIVE_COMPANY });
+    });
+    saveData();
+    ['n-fec','n-pro','n-emp','n-hor','n-tar','n-tot','n-not','n-foto'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+    document.getElementById('n-est').value='Pagado';
+    document.getElementById('n-emp-balance').textContent='';
+    document.getElementById('n-foto-preview').innerHTML='';
+    document.getElementById('n-split-rows').innerHTML='';
+    if (NOMINA_SPLIT_MODE) toggleNominaSplitMode();
+    renderAll();
+  } finally {
+    ADD_NOMINA_EN_CURSO = false;
+  }
 }
 async function delN(id){S.nomina=S.nomina.filter(n=>n.id!==id);await deleteServerItem('nomina', id);saveData();renderAll();}
 
@@ -1792,7 +1923,7 @@ function renderEmpleadoList() {
   box.innerHTML = empleados.map(e => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #222;cursor:pointer;" onclick="openEmpleadoDetail('${e.id}')">
       <div>
-        <div style="color:var(--white);text-decoration:underline;">${e.nombre} ${(e.w9||(e.documentos&&e.documentos.length))?'📄':''}</div>
+        <div style="color:var(--white);text-decoration:underline;">✏️ ${e.nombre} ${(e.w9||(e.documentos&&e.documentos.length))?'📄':''}</div>
         <div style="color:var(--gray);font-size:.65rem;">${e.telefono||''}${e.telefono&&e.email?' · ':''}${e.email||''}${e.tarifaHabitual?` · $${e.tarifaHabitual}/hr`:''}</div>
       </div>
       <button class="del" onclick="event.stopPropagation();delEmpleado('${e.id}')">✕</button>
@@ -1822,14 +1953,30 @@ function saveEmpleadoEdit() {
   if (!e) return;
   const nombre = document.getElementById('emd-nombre').value.trim();
   if (!nombre) return alert(tt('El nombre no puede quedar vacío','Name can\'t be empty'));
+  const nombreAnterior = e.nombre;
+  const nombreCambio = nombreAnterior && nombreAnterior.trim().toLowerCase() !== nombre.toLowerCase();
   e.nombre = nombre;
   e.telefono = document.getElementById('emd-telefono').value.trim();
   e.email = document.getElementById('emd-email').value.trim();
   e.tarifaHabitual = parseFloat(document.getElementById('emd-tarifa').value) || 0;
   e.notas = document.getElementById('emd-notas').value.trim();
+  // CASCADE FIX: if the name was corrected (ej. "manuel" -> "Manuel Triana"), update every past
+  // nómina record under the old name too — otherwise the payment history stays orphaned under a
+  // name that no longer matches the ficha, and looks like a totally different person.
+  let registrosActualizados = 0;
+  if (nombreCambio) {
+    const empresaActual = e.empresa || 'BH Pro';
+    S.nomina.forEach(n => {
+      if (n.empleado && n.empleado.trim().toLowerCase() === nombreAnterior.trim().toLowerCase() && (n.empresa||'BH Pro') === empresaActual) {
+        n.empleado = nombre;
+        registrosActualizados++;
+      }
+    });
+  }
   saveData();
   document.getElementById('emp-modal-title').textContent = e.nombre;
-  alert('✅ ' + tt('Guardado','Saved'));
+  renderAll();
+  alert('✅ ' + tt('Guardado','Saved') + (registrosActualizados ? ` — ${registrosActualizados} ${tt('pago(s) de nómina también se actualizaron a este nombre.','payroll payment(s) also updated to this name.')}` : ''));
 }
 function renderEmpleadoDetailExtras(e) {
   // Total pagado + pendiente histórico, calculado igual que el resumen "Por Empleado" (por
