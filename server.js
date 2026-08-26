@@ -901,7 +901,32 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Cobro de $${(monto||0).toFixed(2)} ${existing ? 'actualizado a Pagado' : 'registrado'} para el proyecto #${proyectoNum} "${proj.nombre}"${refTxt}${imageDataUrl ? ', con el comprobante adjunto guardado' : ''}. Ya está guardado en Cobros.${montoWarning}`, changed: true };
     }
     if (toolName === 'register_gasto') {
-      const { proyectoNum, categoria, monto, descripcion } = input;
+      const { proyectoNum, categoria, monto, descripcion, splits } = input;
+      // splits lets one real-world expense (or payroll payment) be divided across several
+      // projects at once — e.g. Carlos worked on two jobs the same day and $500 of the expense
+      // belongs to each. If splits is given, it takes priority over the single proyectoNum/monto.
+      if (Array.isArray(splits) && splits.length) {
+        const registrados = [];
+        for (const sp of splits) {
+          if (!sp.proyectoNum || !sp.monto) continue;
+          const proj = D.proyectos.find(p => p.num === sp.proyectoNum && (p.empresa||'BH Pro') === emp);
+          if (!proj) return { resultMsg: `Error: no encontré el proyecto #${sp.proyectoNum} en ${emp}. Verifica el número con el usuario antes de dividir el gasto.`, changed: false };
+          registrados.push({ num: sp.proyectoNum, nombre: proj.nombre, monto: sp.monto });
+        }
+        if (!registrados.length) return { resultMsg: 'Error: no se dio ningún split válido (proyectoNum + monto) para dividir el gasto.', changed: false };
+        registrados.forEach((r, idx) => {
+          D.gastos.push({
+            id: 'gas_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '_' + idx,
+            fecha: new Date().toISOString().slice(0,10),
+            proy: r.num, cat: categoria || 'Otros', monto: r.monto,
+            desc: `${descripcion||''}${descripcion?' — ':''}gasto dividido ${idx+1}/${registrados.length}`,
+            recibo: '', foto: imageDataUrl || '', empresa: emp
+          });
+        });
+        saveToDisk();
+        const totalDividido = registrados.reduce((s,r)=>s+r.monto,0);
+        return { resultMsg: `Gasto de $${totalDividido.toFixed(2)} ("${descripcion||''}") dividido entre ${registrados.length} proyectos: ` + registrados.map(r=>`#${r.num} "${r.nombre}" $${r.monto.toFixed(2)}`).join(', ') + '.', changed: true };
+      }
       if (monto === undefined || !descripcion) return { resultMsg: 'Error: faltan datos (monto o descripcion) para registrar el gasto.', changed: false };
       let proj = null;
       if (proyectoNum) {
@@ -920,14 +945,43 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
         : `Gasto general de $${(monto||0).toFixed(2)} ("${descripcion}") registrado sin ligar a ningún proyecto.`) + (imageDataUrl ? ' Recibo adjunto guardado.' : ''), changed: true };
     }
     if (toolName === 'register_nomina') {
-      const { proyectoNum, empleado, horas, tarifa, total, estado } = input;
-      if (!proyectoNum || !empleado) return { resultMsg: 'Error: faltan datos (proyectoNum o empleado) para registrar la nómina.', changed: false };
+      const { proyectoNum, empleado, horas, tarifa, total, estado, splits } = input;
+      if (!empleado) return { resultMsg: 'Error: falta el nombre del empleado.', changed: false };
+      const estadoFinal = estado === 'Pendiente' ? 'Pendiente' : 'Pagado';
+      // Auto-create a bare ficha the first time this name gets paid — matches the same behavior
+      // as the app's own payroll forms, so nobody who gets paid is missing a profile.
+      if (!D.empleados) D.empleados = [];
+      const empleadoYaExiste = D.empleados.some(e => (e.empresa||'BH Pro')===emp && e.nombre.trim().toLowerCase()===empleado.trim().toLowerCase());
+      if (!empleadoYaExiste) {
+        D.empleados.push({ id: 'emp_' + Date.now() + '_' + Math.random().toString(36).slice(2,8), nombre: empleado.trim(), telefono:'', email:'', tarifaHabitual:0, notas:'', empresa: emp });
+      }
+      if (Array.isArray(splits) && splits.length) {
+        const registrados = [];
+        for (const sp of splits) {
+          if (!sp.proyectoNum || !sp.monto) continue;
+          const proj = D.proyectos.find(p => p.num === sp.proyectoNum && (p.empresa||'BH Pro') === emp);
+          if (!proj) return { resultMsg: `Error: no encontré el proyecto #${sp.proyectoNum} en ${emp}. Verifica el número con el usuario antes de dividir el pago.`, changed: false };
+          registrados.push({ num: sp.proyectoNum, nombre: proj.nombre, monto: sp.monto });
+        }
+        if (!registrados.length) return { resultMsg: 'Error: no se dio ningún split válido (proyectoNum + monto) para dividir el pago.', changed: false };
+        registrados.forEach((r, idx) => {
+          D.nomina.push({
+            id: 'nom_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '_' + idx,
+            fecha: new Date().toISOString().slice(0,10),
+            proy: r.num, empleado, horas: 1, tarifa: r.monto, total: r.monto, estado: estadoFinal,
+            notas: `pago dividido ${idx+1}/${registrados.length}`, empresa: emp, foto: imageDataUrl || ''
+          });
+        });
+        saveToDisk();
+        const totalDividido = registrados.reduce((s,r)=>s+r.monto,0);
+        return { resultMsg: `Pago de $${totalDividido.toFixed(2)} a ${empleado} (${estadoFinal}) dividido entre ${registrados.length} proyectos: ` + registrados.map(r=>`#${r.num} "${r.nombre}" $${r.monto.toFixed(2)}`).join(', ') + '.', changed: true };
+      }
+      if (!proyectoNum) return { resultMsg: 'Error: falta el número de proyecto (o usa "splits" si el pago se divide entre varios proyectos).', changed: false };
       const proj = D.proyectos.find(p => p.num === proyectoNum && (p.empresa||'BH Pro') === emp);
       if (!proj) return { resultMsg: `Error: no encontré el proyecto #${proyectoNum} en ${emp}. Verifica el número con el usuario.`, changed: false };
       const h = horas || 1;
       const t = tarifa || 0;
       const tot = total !== undefined ? total : (h * t);
-      const estadoFinal = estado === 'Pendiente' ? 'Pendiente' : 'Pagado';
       D.nomina.push({
         id: 'nom_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         fecha: new Date().toISOString().slice(0,10),
@@ -1187,32 +1241,56 @@ app.post('/api/claude', auth, async (q, r) => {
       },
       {
         name: 'register_gasto',
-        description: 'Registra un gasto (materiales, herramientas, etc.), ligado a un proyecto o como gasto general si el usuario dice que no es de ningún proyecto específico (ej. reembolso aparte). Úsala cuando el usuario pida registrar un gasto por voz/texto, o cuando suba una foto de un recibo de compra.',
+        description: 'Registra un gasto (materiales, herramientas, etc.), ligado a un proyecto, dividido entre varios proyectos, o como gasto general si el usuario dice que no es de ningún proyecto específico. Úsala cuando el usuario pida registrar un gasto por voz/texto, o cuando suba una foto de un recibo de compra.',
         input_schema: {
           type: 'object',
           properties: {
-            proyectoNum: { type: 'string', description: 'Número del proyecto al que pertenece el gasto. Si el usuario dice que es un gasto general sin proyecto (ej. para reembolsar aparte), deja este campo vacío.' },
+            proyectoNum: { type: 'string', description: 'Número del proyecto al que pertenece el gasto (para el caso normal, un solo proyecto). Si el usuario dice que es un gasto general sin proyecto, deja este campo vacío. No lo uses si vas a usar "splits".' },
             categoria: { type: 'string', enum: ['Materiales', 'Herramientas', 'Transporte', 'Otros'], description: 'Categoría del gasto' },
-            monto: { type: 'number', description: 'Monto del gasto en dólares' },
-            descripcion: { type: 'string', description: 'Qué se compró' }
+            monto: { type: 'number', description: 'Monto del gasto en dólares (para el caso normal, un solo proyecto). No lo uses si vas a usar "splits".' },
+            descripcion: { type: 'string', description: 'Qué se compró' },
+            splits: {
+              type: 'array',
+              description: 'Úsalo cuando el usuario diga que UN SOLO gasto real se reparte entre VARIOS proyectos (ej. "compré materiales que se usaron en el 1050 y en el 1060, 300 para cada uno"). Si usas esto, no pases proyectoNum ni monto — cada elemento aquí crea su propio registro de gasto para su proyecto.',
+              items: {
+                type: 'object',
+                properties: {
+                  proyectoNum: { type: 'string', description: 'Número del proyecto para esta porción del gasto' },
+                  monto: { type: 'number', description: 'Monto de esta porción en dólares' }
+                },
+                required: ['proyectoNum', 'monto']
+              }
+            }
           },
-          required: ['categoria', 'monto', 'descripcion']
+          required: ['categoria', 'descripcion']
         }
       },
       {
         name: 'register_nomina',
-        description: 'Registra un pago de nómina/jornal a un empleado, ligado a un proyecto. Úsala cuando el usuario pida registrar el pago a un trabajador por voz/texto. El resultado siempre incluye el balance actualizado de pagado/pendiente de ese empleado — compártelo con el usuario, no lo omitas.',
+        description: 'Registra un pago de nómina/jornal a un empleado, ligado a un proyecto o dividido entre varios proyectos si el empleado trabajó en más de uno el mismo día (ej. "a Carlos se le pagó 500 del proyecto 1050 y 500 del 1060"). Úsala cuando el usuario pida registrar el pago a un trabajador por voz/texto. El resultado siempre incluye el balance actualizado de pagado/pendiente de ese empleado — compártelo con el usuario, no lo omitas.',
         input_schema: {
           type: 'object',
           properties: {
-            proyectoNum: { type: 'string', description: 'Número del proyecto al que pertenece el trabajo' },
+            proyectoNum: { type: 'string', description: 'Número del proyecto al que pertenece el trabajo (para el caso normal, un solo proyecto). No lo uses si vas a usar "splits".' },
             empleado: { type: 'string', description: 'Nombre del empleado' },
-            horas: { type: 'number', description: 'Horas o días trabajados' },
-            tarifa: { type: 'number', description: 'Tarifa por hora/día en dólares' },
-            total: { type: 'number', description: 'Total pagado en dólares. Si no se especifica, se calcula como horas x tarifa.' },
-            estado: { type: 'string', enum: ['Pagado', 'Pendiente'], description: 'Si el usuario dice que ya le pagó, usa "Pagado" (default). Si dice que se lo debe, que está pendiente, o que aún no le paga, usa "Pendiente".' }
+            horas: { type: 'number', description: 'Horas o días trabajados (solo aplica al caso de un solo proyecto)' },
+            tarifa: { type: 'number', description: 'Tarifa por hora/día en dólares (solo aplica al caso de un solo proyecto)' },
+            total: { type: 'number', description: 'Total pagado en dólares (caso de un solo proyecto). Si no se especifica, se calcula como horas x tarifa.' },
+            estado: { type: 'string', enum: ['Pagado', 'Pendiente'], description: 'Si el usuario dice que ya le pagó, usa "Pagado" (default). Si dice que se lo debe, que está pendiente, o que aún no le paga, usa "Pendiente".' },
+            splits: {
+              type: 'array',
+              description: 'Úsalo cuando el usuario diga que UN SOLO pago a un empleado se reparte entre VARIOS proyectos porque trabajó en más de uno. Si usas esto, no pases proyectoNum, horas, tarifa ni total — cada elemento aquí crea su propio registro de nómina para su proyecto, todos con el mismo empleado, fecha y estado.',
+              items: {
+                type: 'object',
+                properties: {
+                  proyectoNum: { type: 'string', description: 'Número del proyecto para esta porción del pago' },
+                  monto: { type: 'number', description: 'Monto de esta porción en dólares' }
+                },
+                required: ['proyectoNum', 'monto']
+              }
+            }
           },
-          required: ['proyectoNum', 'empleado']
+          required: ['empleado']
         }
       },
       {
