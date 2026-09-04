@@ -870,7 +870,12 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       const proyNums = proyectosEmp.map(p=>parseInt(p.num)).filter(n=>!isNaN(n));
       const facNums = facturasEmp.map(f=>parseInt(f.number)).filter(n=>!isNaN(n));
       let nextNum;
-      if (numero && !proyectosEmp.some(p=>p.num===String(numero)) && !facturasEmp.some(f=>f.number===String(numero))) {
+      // FIX: a project sharing its number with ITS OWN invoice is the whole point (that's how they
+      // stay paired) — the old check here also blocked reusing a number if any FACTURA had it,
+      // which meant create_invoice(#1148) followed by create_project(numero:1148) would always
+      // get bumped to a random new number instead of matching. Only an existing PROJECT with that
+      // number is a real collision.
+      if (numero && !proyectosEmp.some(p=>p.num===String(numero))) {
         nextNum = String(numero);
       } else {
         nextNum = (Math.max(0, ...proyNums, ...facNums) + 1).toString();
