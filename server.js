@@ -800,8 +800,53 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       saveToDisk();
       return { resultMsg: `Proyecto #${numero} actualizado:\n` + cambios.map(c=>'- '+c).join('\n') + mensajeSync, changed: true };
     }
+    if (toolName === 'delete_invoice') {
+      const { numero, confirmado } = input;
+      if (!numero) return { resultMsg: 'Error: falta el número de factura a eliminar.', changed: false };
+      const inv = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
+      if (!inv) return { resultMsg: `No encontré ninguna factura #${numero} en ${emp} — puede que ya se haya borrado.`, changed: false };
+      // SAFETY GATE: same two-step pattern as edit_invoice/edit_project. Deleting is irreversible
+      // (no undo button exists for this), so it NEVER happens without confirmado === true, no
+      // matter how sure the user sounded in their first message.
+      if (confirmado !== true) {
+        return {
+          resultMsg: `Esto es lo que se va a BORRAR (todavía NO se ha borrado nada):\nFactura #${numero} — "${inv.billTo||''}" — ${inv.item||inv.projectName||''} — $${(inv.amount||0).toFixed(2)}\n\nEsto no se puede deshacer. Pregúntale al usuario si confirma que quiere borrar exactamente esta factura, y solo si dice que sí, vuelve a llamar a delete_invoice con el mismo número y "confirmado": true.`,
+          changed: false
+        };
+      }
+      D.facturas = D.facturas.filter(f => f.id !== inv.id);
+      saveToDisk();
+      return { resultMsg: `Factura #${numero} ("${inv.billTo||''}" — $${(inv.amount||0).toFixed(2)}) eliminada.`, changed: true };
+    }
+    if (toolName === 'delete_project') {
+      const { numero, confirmado } = input;
+      if (!numero) return { resultMsg: 'Error: falta el número de proyecto a eliminar.', changed: false };
+      const proj = D.proyectos.find(p => p.num === String(numero) && (p.empresa||'BH Pro') === emp);
+      if (!proj) return { resultMsg: `No encontré ningún proyecto #${numero} en ${emp} — puede que ya se haya borrado.`, changed: false };
+      const cobroLigado = D.cobros.find(c => c.num === String(numero) && (c.empresa||'BH Pro') === emp);
+      const gastosLigados = D.gastos.filter(g => g.proy === String(numero) && (g.empresa||'BH Pro') === emp);
+      const nominaLigada = D.nomina.filter(n => n.proy === String(numero) && (n.empresa||'BH Pro') === emp);
+      // SAFETY GATE: same pattern. Deleting a project also removes its cobro/gastos/nómina to
+      // avoid leaving orphaned records — so the preview lists everything that would go with it.
+      if (confirmado !== true) {
+        const detalle = [`Proyecto #${numero} — "${proj.nombre||''}" — $${(proj.valor||0).toFixed(2)}`];
+        if (cobroLigado) detalle.push(`+ su cobro en Collections ($${(cobroLigado.monto||0).toFixed(2)})`);
+        if (gastosLigados.length) detalle.push(`+ ${gastosLigados.length} gasto(s) ligado(s)`);
+        if (nominaLigada.length) detalle.push(`+ ${nominaLigada.length} pago(s) de nómina ligado(s)`);
+        return {
+          resultMsg: `Esto es lo que se va a BORRAR (todavía NO se ha borrado nada):\n` + detalle.map(d=>'- '+d).join('\n') + `\n\nEsto no se puede deshacer. Pregúntale al usuario si confirma, y solo si dice que sí, vuelve a llamar a delete_project con el mismo número y "confirmado": true. Nota: esto NO borra la factura correspondiente si existe — usa delete_invoice aparte para eso si también hace falta.`,
+          changed: false
+        };
+      }
+      D.proyectos = D.proyectos.filter(p => p.id !== proj.id);
+      if (cobroLigado) D.cobros = D.cobros.filter(c => c.id !== cobroLigado.id);
+      D.gastos = D.gastos.filter(g => !(g.proy === String(numero) && (g.empresa||'BH Pro') === emp));
+      D.nomina = D.nomina.filter(n => !(n.proy === String(numero) && (n.empresa||'BH Pro') === emp));
+      saveToDisk();
+      return { resultMsg: `Proyecto #${numero} eliminado, junto con su cobro y ${gastosLigados.length} gasto(s) / ${nominaLigada.length} pago(s) de nómina ligados.`, changed: true };
+    }
     if (toolName === 'create_project') {
-      const { nombre, cliente, valor, loc, estado, numero, inicio, confirmarDuplicado } = input;
+      const { nombre, cliente, valor, loc, estado, numero, inicio, notas, confirmarDuplicado } = input;
       if (!nombre || !cliente || valor === undefined) return { resultMsg: 'Error: faltan datos (nombre, cliente o valor) para crear el proyecto.', changed: false };
       const proyectosEmp = D.proyectos.filter(p => (p.empresa||'BH Pro') === emp);
       const facturasEmp = D.facturas.filter(f => (f.empresa||'BH Pro') === emp);
@@ -841,7 +886,7 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
         id: 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         num: nextNum, nombre, cliente, valor: valor||0,
         inicio: inicio || new Date().toISOString().slice(0,10), fin: '',
-        estado: estado || 'Activo', notas: '', loc: locFinal, empresa: emp,
+        estado: estado || 'Activo', notas: notas || '', loc: locFinal, empresa: emp,
         pedroPct: 0
       });
       if (!clienteExistente) {
@@ -1207,6 +1252,30 @@ app.post('/api/claude', auth, async (q, r) => {
         }
       },
       {
+        name: 'delete_invoice',
+        description: 'Elimina PERMANENTEMENTE una factura existente. Úsala cuando el usuario pida borrar, quitar, o eliminar una factura — por ejemplo, una que se creó por error o duplicada. IMPORTANTE — mismo flujo obligatorio en dos pasos que edit_invoice: (1) Primero llama a esta herramienta SIN "confirmado" — esto NO borra nada, solo devuelve una vista previa de qué se borraría. Muéstrasela al usuario y pregúntale si confirma. (2) Solo si confirma explícitamente en su siguiente mensaje, vuelve a llamarla con el mismo número y "confirmado": true. Esta acción no se puede deshacer, así que nunca asumas confirmación implícita.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            numero: { type: 'string', description: 'Número de la factura a eliminar' },
+            confirmado: { type: 'boolean', description: 'Déjalo sin pasar (o false) para solo ver qué se borraría. Pásalo como true SOLO después de que el usuario confirmó explícitamente que quiere borrar esa factura específica.' }
+          },
+          required: ['numero']
+        }
+      },
+      {
+        name: 'delete_project',
+        description: 'Elimina PERMANENTEMENTE un proyecto existente, junto con su cobro en Collections y cualquier gasto/nómina ligado a él (para no dejar registros huérfanos). NO borra su factura correspondiente — usa delete_invoice aparte si también hace falta. Úsala cuando el usuario pida borrar, quitar, o eliminar un proyecto — por ejemplo, uno creado por error o duplicado. IMPORTANTE — mismo flujo obligatorio en dos pasos: (1) Primero llama a esta herramienta SIN "confirmado" — esto NO borra nada, solo devuelve una vista previa de qué se borraría (incluyendo cuántos registros ligados). Muéstrasela al usuario y pregúntale si confirma. (2) Solo si confirma explícitamente, vuelve a llamarla con el mismo número y "confirmado": true. No se puede deshacer.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            numero: { type: 'string', description: 'Número del proyecto a eliminar' },
+            confirmado: { type: 'boolean', description: 'Déjalo sin pasar (o false) para solo ver qué se borraría. Pásalo como true SOLO después de que el usuario confirmó explícitamente que quiere borrar ese proyecto específico.' }
+          },
+          required: ['numero']
+        }
+      },
+      {
         name: 'create_project',
         description: 'Crea un proyecto nuevo. Si el usuario da un número específico (ej. "1001", o el mismo número que un invoice), pásalo en "numero" para que el proyecto quede con ese número — así coincide con la factura. Si no da número, se asigna automáticamente el siguiente en la secuencia. Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto. IMPORTANTE: si ya existe un proyecto con el mismo nombre, cliente y valor, esta herramienta NO lo crea — te devuelve un aviso de posible duplicado en vez de un error. Cuando eso pase, pregúntale al usuario si de verdad quiere uno nuevo y separado; solo si confirma que sí, vuelve a llamarla con "confirmarDuplicado": true.',
         input_schema: {
@@ -1219,6 +1288,7 @@ app.post('/api/claude', auth, async (q, r) => {
             estado: { type: 'string', enum: ['Activo', 'Completado', 'Pendiente'], description: 'Por defecto Activo si no se especifica' },
             numero: { type: 'string', description: 'Número de proyecto explícito a usar (ej. si debe coincidir con el número de invoice que el usuario mencionó). Si ese número ya está en uso, se ignora y se autonumera.' },
             inicio: { type: 'string', description: 'Fecha de inicio en formato YYYY-MM-DD. Si vienes de una foto de una factura/invoice, usa la MISMA fecha que aparece ahí (no la fecha de hoy) — así el proyecto y la factura quedan con la misma fecha real del trabajo.' },
+            notas: { type: 'string', description: 'Descripción/scope of work del proyecto. IMPORTANTE: si estás creando este proyecto a partir de una foto/factura con descripción de ítems, SIEMPRE copia aquí también esa descripción (o un resumen fiel de ella) — no la dejes solo en la factura. El proyecto necesita tener su propia descripción legible aunque después se borre o no exista la factura correspondiente.' },
             confirmarDuplicado: { type: 'boolean', description: 'Solo pásalo como true si ya le avisaste al usuario que parece un duplicado de un proyecto existente Y él confirmó explícitamente que quiere crear uno nuevo y separado de todas formas.' }
           },
           required: ['nombre', 'cliente', 'valor']
