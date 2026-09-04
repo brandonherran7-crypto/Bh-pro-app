@@ -1210,13 +1210,17 @@ function renderProjectDetail() {
   if (facturasProy.length) {
     facturaSection.style.display = 'block';
     document.getElementById('pd-factura-box').innerHTML = facturasProy.map(f => `
-      <div style="display:flex;justify-content:space-between;align-items:center;${facturasProy.length>1?'padding:6px 0;border-bottom:1px solid #222;':''}">
-        <div>
-          <div style="color:var(--white);">#${f.number} — ${f.billTo||''}</div>
-          <div style="color:var(--gray);font-size:.68rem;">${fd(f.date)} · ${(f.items||[]).length} ítem(s) · ${fmt(f.amount||0)}</div>
+      <div style="${facturasProy.length>1?'padding:6px 0;border-bottom:1px solid #222;':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div>
+            <div style="color:var(--white);">#${f.number} — ${f.billTo||''}</div>
+            <div style="color:var(--gray);font-size:.68rem;">${fd(f.date)} · ${(f.items||[]).length} ítem(s) · ${fmt(f.amount||0)}</div>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-sm btn-outline" onclick="viewInvoiceDetail('${f.id}')">👁 Ver</button>
+          <button class="btn btn-sm" onclick="downloadInvoicePDF('${f.id}')">⬇ PDF</button>
+          <button class="btn btn-sm" style="background:#1B3A6B;" onclick="openEmailModal('${f.id}')">✉ Enviar</button>
           <button class="del" onclick="delInvoiceFromProject('${f.id}')">✕</button>
         </div>
       </div>`).join('');
@@ -1224,14 +1228,26 @@ function renderProjectDetail() {
     facturaSection.style.display = 'none';
   }
 }
+// Copies the invoice's own item descriptions into the project's "notas" if the project doesn't
+// already have its own description saved. This is the safety net for "si ya la envié y la borro,
+// que la descripción quede en el proyecto" — no matter how the project got created, deleting its
+// invoice never loses the scope-of-work text, it just moves it to live on the project instead.
+function rescatarDescripcionDeFacturaAlProyecto(factura) {
+  if (!factura || !factura.number) return;
+  const proy = S.proyectos.find(p => p.num === factura.number && (p.empresa||'BH Pro') === (factura.empresa||'BH Pro'));
+  if (!proy || (proy.notas && proy.notas.trim())) return; // ya tiene su propia descripción, no la pisamos
+  const descripciones = (factura.items||[]).map(it => it.detail || it.desc || '').filter(Boolean);
+  if (descripciones.length) proy.notas = descripciones.join('\n\n');
+}
 // Lets Brandon delete an invoice right from inside the project it belongs to, instead of having
 // to go hunt for it in the crowded Facturas tab — this is the "just let me see/manage it from
 // the project" workflow he asked for. Only removes the invoice itself; the project, its cobro,
-// and its own notas/description all stay intact.
+// and its own notas/description all stay intact (and get backfilled from the invoice first if empty).
 function delInvoiceFromProject(facturaId) {
   const f = S.facturas.find(x=>x.id===facturaId);
   if (!f) return;
   if (!confirm(tt(`¿Eliminar la factura #${f.number}? Esto no borra el proyecto ni el cobro, solo la factura.`, `Delete invoice #${f.number}? This won't delete the project or the collection, only the invoice.`))) return;
+  rescatarDescripcionDeFacturaAlProyecto(f);
   S.facturas = S.facturas.filter(x=>x.id!==facturaId);
   deleteServerItem('facturas', facturaId);
   saveData();
@@ -3275,7 +3291,15 @@ async function sendSelectedInvoices() {
   alert(`✅ Enviadas: ${okCount}${failCount?`\n❌ Fallidas: ${failCount} (revisa que EMAIL_USER/EMAIL_PASS estén configurados en Render)`:''}`);
 }
 
-async function delInvoice(id) { if(!confirm('¿Eliminar?'))return; S.facturas=S.facturas.filter(f=>f.id!==id); await deleteServerItem('facturas', id); saveData(); renderAll(); }
+async function delInvoice(id) {
+  if(!confirm('¿Eliminar?'))return;
+  const f = S.facturas.find(x=>x.id===id);
+  if (f) rescatarDescripcionDeFacturaAlProyecto(f);
+  S.facturas=S.facturas.filter(f=>f.id!==id);
+  await deleteServerItem('facturas', id);
+  saveData();
+  renderAll();
+}
 
 // ===== BANCO =====
 async function connectBank() {
