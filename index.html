@@ -442,6 +442,12 @@ select option{background:var(--black-3);}
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.categoria">Categoría</div><select id="ge-cat" style="width:100%;"><option value="Materiales" data-i18n="opt.materiales">Materiales</option><option value="Herramientas" data-i18n="opt.herramientas">Herramientas</option><option value="Renta equipo" data-i18n="opt.renta_equipo">Renta equipo</option><option value="Transporte" data-i18n="opt.transporte">Transporte</option><option value="Storage" data-i18n="opt.storage">Storage</option><option value="Otros" data-i18n="opt.otros">Otros</option></select></div>
     <div style="margin-bottom:8px;"><div class="fl" data-i18n="fld.descripcion">Descripción</div><input type="text" id="ge-des" style="width:100%;box-sizing:border-box;"></div>
     <div style="margin-bottom:12px;"><div class="fl" data-i18n="fld.recibo">Recibo</div><input type="text" id="ge-rec" style="width:100%;box-sizing:border-box;"></div>
+    <div style="margin-bottom:12px;">
+      <div class="fl" data-i18n="fld.foto_del_recibogasto_opcional">Foto del recibo/gasto (opcional)</div>
+      <div id="ge-foto-actual" style="margin-bottom:6px;"></div>
+      <input type="file" id="ge-foto-nueva" accept="image/*" onchange="previewGastoEditFoto(this)">
+      <div id="ge-foto-preview" style="margin-top:6px;"></div>
+    </div>
     <div style="display:flex;gap:10px;">
       <button class="btn" style="flex:1;" onclick="saveGastoEdit()"><span data-i18n="btn.guardar_cambios">💾 Guardar Cambios</span></button>
       <button class="btn btn-outline" onclick="closeGastoEditModal()" data-i18n="btn.cancelar">Cancelar</button>
@@ -1829,13 +1835,17 @@ async function addGasto() {
 }
 async function delG(id){S.gastos=S.gastos.filter(g=>g.id!==id);await deleteServerItem('gastos', id);saveData();renderAll();}
 let GASTO_EDIT_CURRENT_ID = null;
+let GASTO_EDIT_FOTO_ACCION = null; // null = sin cambio, 'quitar' = borrar la foto al guardar
 // Lets Brandon edit ANY expense after the fact — including reassigning it to a project (or to
-// "General") — which the app never supported before (only delete existed). Solves exactly the
-// "logué esto como general, ahora quiero ligarlo a un proyecto" workflow.
+// "General") and adding/replacing/removing its proof-of-expense photo — which the app never
+// supported before (only delete existed, and only the ADD form had a photo field). Solves both
+// "logué esto como general, ahora quiero ligarlo a un proyecto" and "quiero agregarle la foto del
+// recibo que no subí la primera vez".
 function openGastoEditModal(gastoId) {
   const g = S.gastos.find(x=>x.id===gastoId);
   if (!g) return;
   GASTO_EDIT_CURRENT_ID = gastoId;
+  GASTO_EDIT_FOTO_ACCION = null;
   document.getElementById('ge-fec').value = g.fecha || '';
   document.getElementById('ge-mon').value = g.monto || 0;
   document.getElementById('ge-cat').value = g.cat || 'Materiales';
@@ -1843,13 +1853,40 @@ function openGastoEditModal(gastoId) {
   document.getElementById('ge-rec').value = g.recibo || '';
   populateProjectSelect('ge-pro', true);
   document.getElementById('ge-pro').value = g.proy || 'GENERAL';
+  document.getElementById('ge-foto-nueva').value = '';
+  document.getElementById('ge-foto-preview').innerHTML = '';
+  renderGastoEditFotoActual(g);
   document.getElementById('gasto-edit-modal').style.display = 'flex';
+}
+function renderGastoEditFotoActual(g) {
+  const box = document.getElementById('ge-foto-actual');
+  if (g.foto) {
+    box.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" class="btn btn-sm btn-outline" onclick="abrirVisorArchivo(S.gastos.find(x=>x.id==='${g.id}').foto, '${tt('Comprobante actual','Current proof')}')">👁 ${tt('Ver actual','View current')}</button>
+        <button type="button" class="del" onclick="quitarFotoGastoEdit()">✕ ${tt('Quitar','Remove')}</button>
+      </div>`;
+  } else {
+    box.innerHTML = `<span style="color:var(--gray);font-size:.7rem;">${tt('Sin foto adjunta.','No photo attached.')}</span>`;
+  }
+}
+function quitarFotoGastoEdit() {
+  GASTO_EDIT_FOTO_ACCION = 'quitar';
+  document.getElementById('ge-foto-actual').innerHTML = `<span style="color:var(--gold);font-size:.7rem;">${tt('Se quitará al guardar.','Will be removed on save.')}</span>`;
+}
+function previewGastoEditFoto(input) {
+  const box = document.getElementById('ge-foto-preview');
+  if (!input.files || !input.files[0]) { box.innerHTML=''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { box.innerHTML = `<img src="${reader.result}" style="max-height:80px;border-radius:6px;">`; };
+  reader.readAsDataURL(input.files[0]);
 }
 function closeGastoEditModal() {
   document.getElementById('gasto-edit-modal').style.display = 'none';
   GASTO_EDIT_CURRENT_ID = null;
+  GASTO_EDIT_FOTO_ACCION = null;
 }
-function saveGastoEdit() {
+async function saveGastoEdit() {
   const g = S.gastos.find(x=>x.id===GASTO_EDIT_CURRENT_ID);
   if (!g) return;
   const mon = parseFloat(document.getElementById('ge-mon').value) || 0;
@@ -1862,6 +1899,12 @@ function saveGastoEdit() {
   g.cat = document.getElementById('ge-cat').value;
   g.desc = document.getElementById('ge-des').value.trim();
   g.recibo = document.getElementById('ge-rec').value.trim();
+  const fotoInput = document.getElementById('ge-foto-nueva');
+  if (fotoInput.files && fotoInput.files[0]) {
+    try { g.foto = await fileToCompressedBase64(fotoInput.files[0], 900); } catch(e) {}
+  } else if (GASTO_EDIT_FOTO_ACCION === 'quitar') {
+    g.foto = '';
+  }
   saveData();
   closeGastoEditModal();
   renderAll();
