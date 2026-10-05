@@ -694,12 +694,22 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       return { resultMsg: `Factura #${nextNum} creada para "${billTo}" por un total de $${total.toFixed(2)}, con ${cleanItems.length} ítem(s). Ya está guardada en la lista de Facturas.${billAddress ? ` La ubicación del proyecto #${nextNum} quedó como "${billAddress}".` : ''}`, changed: true };
     }
     if (toolName === 'edit_invoice') {
-      const { numero, billTo, billAddress, note, items, fecha, dueDate, confirmado } = input;
+      const { numero, nuevoNumero, billTo, billAddress, note, items, fecha, dueDate, confirmado } = input;
       if (!numero) return { resultMsg: 'Error: falta el número de factura a editar.', changed: false };
       const inv = D.facturas.find(f => f.number === String(numero) && (f.empresa||'BH Pro') === emp);
       if (!inv) return { resultMsg: `Error: no encontré ninguna factura #${numero} en ${emp}.`, changed: false };
       // Build a preview of what WOULD change without touching anything yet.
       const cambios = [];
+      let renumeroError = null;
+      if (nuevoNumero !== undefined && String(nuevoNumero) !== inv.number) {
+        const yaExiste = D.facturas.some(f => f.number === String(nuevoNumero) && (f.empresa||'BH Pro') === emp && f.id !== inv.id);
+        if (yaExiste) {
+          renumeroError = `Error: ya existe otra factura #${nuevoNumero} en ${emp} — no puedo renombrar a un número que ya está en uso. Bórrala o elige otro número primero.`;
+        } else {
+          cambios.push(`Número de factura: #${inv.number} → #${nuevoNumero} (para que coincida con el proyecto correspondiente)`);
+        }
+      }
+      if (renumeroError) return { resultMsg: renumeroError, changed: false };
       if (billTo !== undefined && billTo !== inv.billTo) cambios.push(`Bill To: "${inv.billTo||''}" → "${billTo}"`);
       if (billAddress !== undefined && billAddress !== inv.billAddress) cambios.push(`Dirección de facturación (y ubicación del proyecto): "${inv.billAddress||''}" → "${billAddress}"`);
       if (note !== undefined && note !== inv.note) cambios.push(`Nota: "${inv.note||'(vacía)'}" → "${note}"`);
@@ -735,8 +745,15 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
         inv.items = items.map(it => ({ desc: it.desc||'', detail: it.detail||'', qty: it.qty||1, rate: it.rate||0 }));
         inv.amount = inv.items.reduce((s,it)=>s+(it.qty*it.rate),0);
       }
+      const numeroViejo = inv.number;
+      if (nuevoNumero !== undefined && String(nuevoNumero) !== numeroViejo) {
+        inv.number = String(nuevoNumero);
+        // Keep the matching cobro's #factura in sync too, so Collections doesn't orphan.
+        const cobroLigado = D.cobros.find(c => c.num === numeroViejo && (c.empresa||'BH Pro') === emp);
+        if (cobroLigado) cobroLigado.num = String(nuevoNumero);
+      }
       saveToDisk();
-      return { resultMsg: `Factura #${numero} actualizada:\n` + cambios.map(c=>'- '+c).join('\n'), changed: true };
+      return { resultMsg: `Factura #${numeroViejo} actualizada:\n` + cambios.map(c=>'- '+c).join('\n') + (nuevoNumero !== undefined && String(nuevoNumero) !== numeroViejo ? ` Ahora es la factura #${nuevoNumero}.` : ''), changed: true };
     }
     if (toolName === 'edit_project') {
       const { numero, nombre, cliente, valor, loc, estado, notas, inicio, fin, confirmado } = input;
@@ -863,12 +880,22 @@ function executeAiTool(toolName, input, empresa, imageDataUrl) {
       // invoice photo sent twice, or "créame este proyecto" on something already registered) — not
       // a new one. Block auto-creation and make the assistant confirm with the user first, instead
       // of silently piling up duplicate numbered records for one real project.
+      // EXCEPTION: recurring weekly work (same scope name, same client, even the same billed
+      // amount every week) is normal in this business — e.g. "HVAC Foil Duct & Pipe Restoration –
+      // Section" billed at the same rate every week for a different section. If the new entry's
+      // date is different from the existing one's, that's a strong signal it's a NEW period's
+      // work, not a resubmission — so only treat it as a duplicate when the date also matches (or
+      // neither has one to compare).
       const normalizar = s => (s||'').trim().toLowerCase().replace(/\s+/g,' ');
-      const posibleDuplicado = proyectosEmp.find(p =>
-        normalizar(p.nombre) === normalizar(nombre) &&
-        normalizar(p.cliente) === normalizar(cliente) &&
-        Math.abs((p.valor||0) - (valor||0)) < 0.01
-      );
+      const posibleDuplicado = proyectosEmp.find(p => {
+        const mismoNombreClienteValor =
+          normalizar(p.nombre) === normalizar(nombre) &&
+          normalizar(p.cliente) === normalizar(cliente) &&
+          Math.abs((p.valor||0) - (valor||0)) < 0.01;
+        if (!mismoNombreClienteValor) return false;
+        if (inicio && p.inicio && inicio !== p.inicio) return false; // distinta fecha = probablemente otra semana, no duplicado
+        return true;
+      });
       if (posibleDuplicado && confirmarDuplicado !== true) {
         return {
           resultMsg: `Ya existe el proyecto #${posibleDuplicado.num} "${posibleDuplicado.nombre}" para "${posibleDuplicado.cliente}" con el mismo valor ($${(valor||0).toFixed(2)}) — esto parece ser el mismo trabajo, no uno nuevo. Pregúntale al usuario: ¿de verdad quiere crear un proyecto NUEVO y separado con estos mismos datos, o se refería al #${posibleDuplicado.num} que ya existe? Si el usuario confirma que sí quiere uno nuevo y distinto, vuelve a llamar a create_project con los mismos datos y "confirmarDuplicado": true. Si en realidad se refería al existente, no crees nada — usa el #${posibleDuplicado.num} para lo que necesite (ej. register_cobro, edit_invoice, etc.).`,
@@ -1219,7 +1246,8 @@ app.post('/api/claude', auth, async (q, r) => {
         input_schema: {
           type: 'object',
           properties: {
-            numero: { type: 'string', description: 'Número de la factura existente a editar' },
+            numero: { type: 'string', description: 'Número ACTUAL de la factura existente a editar' },
+            nuevoNumero: { type: 'string', description: 'Úsalo cuando el usuario pida renumerar/renombrar una factura (ej. "esta factura quedó desincronizada del proyecto, ponle el mismo número que el proyecto"). Falla con un error claro si ese número ya lo usa otra factura — en ese caso dile al usuario que primero libere o renombre esa otra.' },
             billTo: { type: 'string', description: 'Nuevo Bill To, solo si el usuario pide cambiarlo' },
             billAddress: { type: 'string', description: 'Nueva dirección de facturación, solo si el usuario pide corregirla. Al cambiarla, la ubicación (loc) del proyecto correspondiente se actualiza automáticamente a este mismo valor.' },
             note: { type: 'string', description: 'Nueva nota al pie, solo si el usuario pide cambiarla' },
@@ -1290,7 +1318,7 @@ app.post('/api/claude', auth, async (q, r) => {
       },
       {
         name: 'create_project',
-        description: 'Crea un proyecto nuevo. Si el usuario da un número específico (ej. "1001", o el mismo número que un invoice), pásalo en "numero" para que el proyecto quede con ese número — así coincide con la factura. Si no da número, se asigna automáticamente el siguiente en la secuencia. Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto. IMPORTANTE: si ya existe un proyecto con el mismo nombre, cliente y valor, esta herramienta NO lo crea — te devuelve un aviso de posible duplicado en vez de un error. Cuando eso pase, pregúntale al usuario si de verdad quiere uno nuevo y separado; solo si confirma que sí, vuelve a llamarla con "confirmarDuplicado": true.',
+        description: 'Crea un proyecto nuevo. Si el usuario da un número específico (ej. "1001", o el mismo número que un invoice), pásalo en "numero" para que el proyecto quede con ese número — así coincide con la factura. Si no da número, se asigna automáticamente el siguiente en la secuencia. SIEMPRE pasa "inicio" con la fecha real del trabajo/factura si la tienes (no la dejes vacía) — se usa para distinguir trabajo recurrente semanal (mismo nombre/cliente/valor pero otra fecha) de un verdadero duplicado. Úsala cuando el usuario pida registrar/crear un proyecto nuevo por voz o texto. IMPORTANTE: si ya existe un proyecto con el mismo nombre, cliente, valor Y fecha, esta herramienta NO lo crea — te devuelve un aviso de posible duplicado en vez de un error. Si la fecha es distinta (ej. trabajo recurrente de otra semana, como mantenimiento de HVAC facturado igual cada semana), lo crea directo sin preguntar. Cuando sí salte el aviso, pregúntale al usuario si de verdad quiere uno nuevo y separado; solo si confirma que sí, vuelve a llamarla con "confirmarDuplicado": true.',
         input_schema: {
           type: 'object',
           properties: {
