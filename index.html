@@ -1061,7 +1061,15 @@ async function loadAuditLog() {
 
 
 // ===== DATA =====
-async function loadData() {
+async function loadData(force) {
+  // COOL-DOWN, applied here instead of just in the auto-refresh timer: the previous fix only
+  // guarded the 20-second timer's own call, but loadData() is called from ~13 other places
+  // (tab switches, modal closes, backup views, etc.) that were NOT guarded — any one of them
+  // firing shortly after a save (e.g. registering an Abono) could still read stale server data
+  // and briefly show it as reverted. Guarding loadData() itself closes ALL of those paths at
+  // once. Pass force=true only for actions that must see truly fresh data no matter what (none
+  // currently need this, but the escape hatch exists).
+  if (!force && Date.now() - LAST_SAVE_ACTIVITY < 8000) return;
   try {
     const res = await fetch('/api/data');
     if (res.ok) {
