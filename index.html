@@ -847,11 +847,18 @@ function selectCompany(name) {
   if (document.getElementById('banco').classList.contains('active')) loadBankData();
 }
 let AUTO_REFRESH_TIMER = null;
+// Tracks the last time ANY local edit happened (toggles, new records, edits, deletes — anything
+// that calls saveData()). The auto-refresh timer below checks this and skips its cycle if a save
+// is recent, closing off the ENTIRE class of races where a background refresh could read the
+// server mid-save and briefly show stale data (e.g. a "Pagado" toggle reading back as "Pendiente"
+// for a few seconds right after tapping it) — regardless of the exact timing involved.
+let LAST_SAVE_ACTIVITY = 0;
 function startAutoRefresh() {
   if (AUTO_REFRESH_TIMER) clearInterval(AUTO_REFRESH_TIMER);
   AUTO_REFRESH_TIMER = setInterval(async () => {
     if (document.visibilityState !== 'visible') return;
     if (document.activeElement && ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (Date.now() - LAST_SAVE_ACTIVITY < 8000) return; // cool-down: let any recent save fully land first
     await loadData();
     renderAll();
     if (PD_CURRENT_NUM) renderProjectDetail();
@@ -1116,7 +1123,8 @@ function mergeArrayById(serverArr, localArr) {
 // them to run strictly one at a time, in order, so no save can ever step on another mid-flight.
 let SAVE_DATA_QUEUE = Promise.resolve();
 function saveData() {
-  SAVE_DATA_QUEUE = SAVE_DATA_QUEUE.then(() => saveDataInner()).catch(() => {});
+  LAST_SAVE_ACTIVITY = Date.now();
+  SAVE_DATA_QUEUE = SAVE_DATA_QUEUE.then(() => saveDataInner()).then(() => { LAST_SAVE_ACTIVITY = Date.now(); }).catch(() => {});
   return SAVE_DATA_QUEUE;
 }
 async function saveDataInner() {
